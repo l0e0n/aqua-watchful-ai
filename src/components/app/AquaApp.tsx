@@ -192,8 +192,7 @@ function HomeScreen({ onOpenLive }: { onOpenLive: () => void }) {
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <QuickAction icon={LifeBuoy} title="إنقاذ يدوي" sub="تفعيل فوري" tone="danger" />
+      <div className="grid grid-cols-1 gap-3">
         <QuickAction icon={BellRing} title="تنبيه تجريبي" sub="اختبار النظام" tone="aqua" />
       </div>
     </div>
@@ -275,8 +274,6 @@ function LiveScreen() {
       <div className="rounded-2xl border border-border/60 bg-card-gradient p-4">
         <div className="text-xs font-bold">تحليل لحظي</div>
         <div className="mt-3 space-y-2.5">
-          <AiRow icon={ScanFace} label="عدد الأشخاص" value="2" />
-          <AiRow icon={Waves} label="حالة الماء" value="هادئ" />
           <AiRow icon={Activity} label="مستوى الخطر" value="منخفض" />
         </div>
       </div>
