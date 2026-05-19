@@ -334,38 +334,172 @@ function AlertsScreen() {
 /* ---------- Settings ---------- */
 
 function SettingsScreen() {
+  const [camOn, setCamOn] = useState(true);
+  const [sensorOn, setSensorOn] = useState(true);
+  const [aiAlert, setAiAlert] = useState(true);
+  const [soundAlert, setSoundAlert] = useState(true);
+  const [sensitivity, setSensitivity] = useState<"low" | "mid" | "high">("mid");
+  const [alertType, setAlertType] = useState<"all" | "push" | "sound">("all");
+  const [range, setRange] = useState(120);
+  const [volume, setVolume] = useState(80);
+
   return (
     <div className="space-y-5 px-5">
-      <div className="flex items-center gap-3 rounded-3xl border border-border/60 bg-card-gradient p-4">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-aqua-gradient text-primary-foreground">
-          <User className="h-6 w-6" />
+      {/* Camera */}
+      <SettingsCard icon={Camera} title="إعدادات الكاميرا">
+        <ToggleRow label="تفعيل الكاميرا" on={camOn} onChange={setCamOn} />
+        <Field label="مصدر الكاميرا (IP / RTSP)">
+          <input
+            defaultValue="rtsp://192.168.1.42:554/stream"
+            dir="ltr"
+            className="w-full rounded-xl border border-border/60 bg-background/60 px-3 py-2.5 text-xs font-mono outline-none focus:border-aqua/60"
+          />
+        </Field>
+        <Field label="حساسية الكشف AI">
+          <Segmented
+            value={sensitivity}
+            onChange={(v) => setSensitivity(v as any)}
+            options={[
+              { id: "high", label: "عالية" },
+              { id: "mid", label: "متوسطة" },
+              { id: "low", label: "منخفضة" },
+            ]}
+          />
+        </Field>
+        <button className="text-[11px] font-semibold text-aqua">معايرة الكاميرا →</button>
+      </SettingsCard>
+
+      {/* Distance sensor */}
+      <SettingsCard icon={Radar} title="حساس المسافة">
+        <ToggleRow label="تفعيل الحساس" on={sensorOn} onChange={setSensorOn} />
+        <Field label={`نطاق الكشف: ${range} سم`}>
+          <Slider value={range} min={20} max={300} onChange={setRange} />
+        </Field>
+        <div className="flex gap-4 text-[11px] font-semibold">
+          <button className="text-aqua">معايرة →</button>
+          <span className="text-muted-foreground/40">·</span>
+          <button className="text-aqua">استبدال الحساس →</button>
         </div>
-        <div className="flex-1">
-          <div className="text-sm font-bold">عبدالله العتيبي</div>
-          <div className="text-[11px] text-muted-foreground">المسبح الرئيسي · المنزل</div>
-        </div>
-        <ChevronLeft className="h-4 w-4 text-muted-foreground" />
-      </div>
+      </SettingsCard>
 
-      <SettingsGroup title="الأجهزة">
-        <SettingsRow icon={Radar} label="حساس المسافة" value="نشط" />
-        <SettingsRow icon={Camera} label="الكاميرا" value="HD · 60fps" />
-        <SettingsRow icon={Wifi} label="الاتصال" value="WiFi · ممتاز" />
-      </SettingsGroup>
+      {/* Alerts */}
+      <SettingsCard icon={Bell} title="إعدادات التنبيهات">
+        <ToggleRow label="تنبيه الذكاء الاصطناعي" on={aiAlert} onChange={setAiAlert} />
+        <ToggleRow label="تنبيهات صوتية" on={soundAlert} onChange={setSoundAlert} />
+        <Field label={`مستوى الصوت: ${volume}%`}>
+          <Slider value={volume} min={0} max={100} onChange={setVolume} />
+        </Field>
+        <Field label="نوع التنبيه">
+          <Segmented
+            value={alertType}
+            onChange={(v) => setAlertType(v as any)}
+            options={[
+              { id: "all", label: "الكل" },
+              { id: "push", label: "إشعار" },
+              { id: "sound", label: "صوت" },
+            ]}
+          />
+        </Field>
+      </SettingsCard>
 
-      <SettingsGroup title="التنبيهات">
-        <Toggle label="إشعارات فورية" on />
-        <Toggle label="إنذار صوتي" on />
-        <Toggle label="اتصال بالطوارئ" on={false} />
-      </SettingsGroup>
-
-      <SettingsGroup title="الذكاء الاصطناعي">
-        <SettingsRow icon={Brain} label="حساسية الكشف" value="عالية" />
-        <SettingsRow icon={ScanFace} label="تصنيف الأشخاص" value="مفعّل" />
-      </SettingsGroup>
+      <button className="w-full rounded-2xl bg-aqua-gradient py-3.5 text-sm font-bold text-primary-foreground shadow-glow">
+        حفظ الإعدادات
+      </button>
     </div>
   );
 }
+
+function SettingsCard({
+  icon: Icon, title, children,
+}: { icon: any; title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-3xl border border-border/60 bg-card-gradient p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <div className="grid h-7 w-7 place-items-center rounded-lg bg-aqua/15 text-aqua">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="text-sm font-bold">{title}</div>
+      </div>
+      <div className="space-y-4">{children}</div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function ToggleRow({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs">{label}</span>
+      <button
+        onClick={() => onChange(!on)}
+        className={`relative h-6 w-11 rounded-full transition-colors ${on ? "bg-aqua-gradient" : "bg-muted"}`}
+      >
+        <span
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition-all ${
+            on ? "right-0.5" : "right-[calc(100%-1.375rem)]"
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+function Segmented({
+  value, onChange, options,
+}: { value: string; onChange: (v: string) => void; options: { id: string; label: string }[] }) {
+  return (
+    <div className="flex gap-1.5 rounded-2xl border border-border/60 bg-background/60 p-1">
+      {options.map((o) => {
+        const active = o.id === value;
+        return (
+          <button
+            key={o.id}
+            onClick={() => onChange(o.id)}
+            className={`flex-1 rounded-xl py-2 text-[11px] font-semibold transition-all ${
+              active ? "bg-aqua-gradient text-primary-foreground shadow-glow" : "text-muted-foreground"
+            }`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Slider({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (v: number) => void }) {
+  const pct = ((value - min) / (max - min)) * 100;
+  return (
+    <div className="relative h-6">
+      <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted" />
+      <div
+        className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-aqua-gradient"
+        style={{ right: 0, width: `${pct}%` }}
+      />
+      <div
+        className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-aqua bg-background shadow-glow"
+        style={{ right: `calc(${pct}% - 8px)` }}
+      />
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="absolute inset-0 w-full cursor-pointer opacity-0"
+      />
+    </div>
+  );
+}
+
 
 function SettingsGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
