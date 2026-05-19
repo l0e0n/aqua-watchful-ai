@@ -1,38 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Navbar } from "@/components/site/Navbar";
-import { Hero } from "@/components/site/Hero";
-import { HowItWorks } from "@/components/site/HowItWorks";
-import { DrowningDetection } from "@/components/site/DrowningDetection";
-import { Features } from "@/components/site/Features";
-import { AISection } from "@/components/site/AISection";
-import { AppShowcase } from "@/components/site/AppShowcase";
-import { CTA } from "@/components/site/CTA";
-import { Footer } from "@/components/site/Footer";
+import { AquaApp } from "@/components/app/AquaApp";
 
 export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "Aqua Guard — نظام ذكي لحماية الأطفال من الغرق" },
-      { name: "description", content: "Aqua Guard نظام متكامل يدمج الحساسات والكاميرا والذكاء الاصطناعي لحماية الأطفال من خطر الغرق في المسابح." },
+      { title: "Aqua Guard — تطبيق حماية الأطفال من الغرق" },
+      { name: "description", content: "تطبيق Aqua Guard لمراقبة المسبح ذكياً وحماية الأطفال من الغرق." },
     ],
   }),
 });
 
 function Index() {
   return (
-    <div dir="rtl" lang="ar" className="min-h-screen bg-background">
-      <Navbar />
-      <main>
-        <Hero />
-        <HowItWorks />
-        <DrowningDetection />
-        <Features />
-        <AISection />
-        <AppShowcase />
-        <CTA />
-      </main>
-      <Footer />
+    <div dir="rtl" lang="ar" className="min-h-screen bg-deep">
+      <AquaApp />
     </div>
   );
 }
