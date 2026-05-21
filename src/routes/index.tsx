@@ -13,7 +13,7 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   return (
-    <div dir="rtl" lang="ar" className="min-h-screen bg-deep">
+    <div className="min-h-screen bg-deep">
       <AquaApp />
     </div>
   );
