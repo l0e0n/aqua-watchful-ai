@@ -1,14 +1,27 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Shield, Home, Bell, Settings, Video, BellRing,
   ThermometerSun, Activity, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight,
   Wifi, Battery, Signal, Play, Pause, Maximize2, ScanFace, Brain,
   Radar, Camera, LifeBuoy, Globe, Lock, Mail, ArrowRight, Zap, Power,
+  Eye, EyeOff, KeyRound, ArrowLeft, Smartphone, Volume2,
 } from "lucide-react";
 import heroPool from "@/assets/hero-pool.jpg";
 
 type Tab = "home" | "live" | "alerts" | "settings";
 type Lang = "en" | "ar";
+type IncidentSeverity = "danger" | "warning" | "info";
+type IncidentKind = "drowning_suspect" | "drowning_critical" | "child_near" | "routine" | "cam_start";
+type ActionKey = "platform" | "alarm" | "notification";
+
+interface Incident {
+  id: string;
+  kind: IncidentKind;
+  severity: IncidentSeverity;
+  timestamp: number; // ms epoch
+  actions: ActionKey[];
+  confidence?: number; // 0..100
+}
 
 /* ---------- i18n ---------- */
 
@@ -23,6 +36,22 @@ const dict = {
     email: "Email", password: "Password",
     signIn: "Sign in", forgot: "Forgot password?",
     or: "or", signUp: "Create new account",
+    // validation
+    errEmailRequired: "Email is required.",
+    errEmailInvalid: "Please enter a valid email address.",
+    errPasswordRequired: "Password is required.",
+    errPasswordShort: "Password must be at least 8 characters.",
+    errLoginFailed: "Invalid email or password. Please try again.",
+    // forgot password
+    forgotTitle: "Reset your password",
+    forgotSub: "Enter your account email and we'll send you a secure reset link.",
+    sendLink: "Send reset link",
+    backToLogin: "Back to sign in",
+    resetSentTitle: "Check your inbox",
+    resetSentSub: "If an account exists for that email, a reset link is on the way. The link expires in 30 minutes.",
+    resending: "Sending…",
+    resend: "Resend",
+    // home
     systemActive: "System active", lastCheck: "Last check just now",
     poolStatus: "Pool status", safe: "Fully safe",
     temp: "Temperature", motion: "Motion", camera: "Camera", calm: "Calm",
@@ -33,11 +62,18 @@ const dict = {
     distSensor: "Distance sensor",
     testAlert: "Test alert", testSub: "System self-check",
     hydraulic: "Hydraulic rescue system", hydraulicSub: "AI-triggered lift platform",
-    armed: "Armed", standby: "Standby", deploy: "Deploy now",
-    autoMode: "Auto-deploy by AI", manualOverride: "Manual override",
+    armed: "Armed", standby: "Standby", deploy: "Deploy now", deployed: "Deployed",
+    autoMode: "Auto-deploy by AI", manualOverride: "Manual override", retract: "Retract platform",
     liftStatus: "Lift status", retracted: "Retracted", riskLevel: "Risk level",
     low: "Low", instantAnalysis: "Live analysis",
+    simulate: "Simulate drowning detection", simulateSub: "Trigger AI → hydraulic chain (demo)",
+    // alerts
     all: "All", critical: "Critical", warning: "Warning", info: "Info",
+    incidentType: "Type", actionsTaken: "Actions executed",
+    actPlatform: "Hydraulic platform", actAlarm: "Audible alarm", actNotification: "Push notification",
+    autoChain: "AI → Hydraulic auto chain executed",
+    noIncidents: "No incidents in this category.",
+    // settings
     cameraSettings: "Camera settings", enableCam: "Enable camera",
     rtsp: "Camera source (IP / RTSP)", aiSens: "AI detection sensitivity",
     high: "High", mid: "Medium",
@@ -50,14 +86,19 @@ const dict = {
     hydraulicSettings: "Hydraulic system",
     enableHydraulic: "Enable hydraulic rescue",
     aiAutoTrigger: "AI auto-trigger on drowning",
+    aiAutoTriggerSub: "Activates platform instantly with zero delay.",
     responseTime: "Response time",
     language: "Language",
-    drowningSuspect: "Suspected drowning", drownDesc: "Abnormal motion pattern — alarm triggered.",
-    childNear: "Child near pool", childNearDesc: "Distance sensor detected approach.",
-    routineOk: "Routine check passed", routineDesc: "All sensors operational.",
-    camStart: "Camera started", camStartDesc: "Streaming started after motion detected.",
-    hydraulicFired: "Hydraulic deployed", hydraulicFiredDesc: "Rescue platform raised by AI.",
-    yesterday: "Yesterday",
+    // incident titles
+    titleDrownSuspect: "Suspected drowning",
+    titleDrownCritical: "Drowning detected — rescue executed",
+    titleChildNear: "Child near pool",
+    titleRoutine: "Routine check passed",
+    titleCamStart: "Camera started",
+    descChildNear: "Distance sensor detected approach.",
+    descRoutine: "All sensors operational.",
+    descCamStart: "Streaming started after motion detected.",
+    yesterday: "Yesterday", justNow: "Just now",
   },
   ar: {
     appName: "Aqua Guard",
@@ -69,6 +110,19 @@ const dict = {
     email: "البريد الإلكتروني", password: "كلمة المرور",
     signIn: "تسجيل الدخول", forgot: "نسيت كلمة المرور؟",
     or: "أو", signUp: "إنشاء حساب جديد",
+    errEmailRequired: "البريد الإلكتروني مطلوب.",
+    errEmailInvalid: "الرجاء إدخال بريد إلكتروني صالح.",
+    errPasswordRequired: "كلمة المرور مطلوبة.",
+    errPasswordShort: "يجب أن تكون كلمة المرور 8 أحرف على الأقل.",
+    errLoginFailed: "البريد الإلكتروني أو كلمة المرور غير صحيحة، حاول مرة أخرى.",
+    forgotTitle: "استعادة كلمة المرور",
+    forgotSub: "أدخل بريدك الإلكتروني وسنرسل لك رابطاً آمناً لإعادة التعيين.",
+    sendLink: "إرسال رابط الاستعادة",
+    backToLogin: "العودة لتسجيل الدخول",
+    resetSentTitle: "تفقّد بريدك الإلكتروني",
+    resetSentSub: "إذا كان لديك حساب بهذا البريد فستصلك رسالة بها رابط إعادة التعيين. ينتهي الرابط خلال 30 دقيقة.",
+    resending: "جارٍ الإرسال…",
+    resend: "إعادة إرسال",
     systemActive: "النظام نشط", lastCheck: "آخر فحص الآن",
     poolStatus: "حالة المسبح", safe: "آمن تماماً",
     temp: "الحرارة", motion: "الحركة", camera: "الكاميرا", calm: "هادئة",
@@ -79,11 +133,16 @@ const dict = {
     distSensor: "حساس المسافة",
     testAlert: "تنبيه تجريبي", testSub: "اختبار النظام",
     hydraulic: "النظام الهيدروليكي للإنقاذ", hydraulicSub: "منصة رفع يفعّلها الذكاء الاصطناعي",
-    armed: "جاهز", standby: "وضع الانتظار", deploy: "تفعيل الآن",
-    autoMode: "تفعيل تلقائي بالذكاء الاصطناعي", manualOverride: "تجاوز يدوي",
+    armed: "جاهز", standby: "وضع الانتظار", deploy: "تفعيل الآن", deployed: "تم التفعيل",
+    autoMode: "تفعيل تلقائي بالذكاء الاصطناعي", manualOverride: "تجاوز يدوي", retract: "إعادة طيّ المنصة",
     liftStatus: "حالة المنصة", retracted: "مطوية", riskLevel: "مستوى الخطر",
     low: "منخفض", instantAnalysis: "تحليل لحظي",
+    simulate: "محاكاة اكتشاف غرق", simulateSub: "تفعيل سلسلة AI → الهيدروليك (تجريبي)",
     all: "الكل", critical: "حرجة", warning: "تحذيرية", info: "عادية",
+    incidentType: "نوع الحالة", actionsTaken: "الإجراءات المنفّذة",
+    actPlatform: "المنصة الهيدروليكية", actAlarm: "إنذار صوتي", actNotification: "إشعار فوري",
+    autoChain: "تم تنفيذ سلسلة AI → الهيدروليك تلقائياً",
+    noIncidents: "لا توجد حوادث في هذه الفئة.",
     cameraSettings: "إعدادات الكاميرا", enableCam: "تفعيل الكاميرا",
     rtsp: "مصدر الكاميرا (IP / RTSP)", aiSens: "حساسية الكشف AI",
     high: "عالية", mid: "متوسطة",
@@ -96,25 +155,79 @@ const dict = {
     hydraulicSettings: "النظام الهيدروليكي",
     enableHydraulic: "تفعيل نظام الإنقاذ الهيدروليكي",
     aiAutoTrigger: "تفعيل تلقائي عند رصد غرق",
+    aiAutoTriggerSub: "يرفع المنصة فوراً وبدون أي تأخير.",
     responseTime: "زمن الاستجابة",
     language: "اللغة",
-    drowningSuspect: "اشتباه غرق", drownDesc: "نمط حركة غير طبيعي — تم تفعيل الإنذار.",
-    childNear: "طفل بالقرب من المسبح", childNearDesc: "حساس المسافة رصد اقتراب.",
-    routineOk: "فحص دوري ناجح", routineDesc: "جميع الحساسات تعمل بشكل سليم.",
-    camStart: "تشغيل الكاميرا", camStartDesc: "بدء البث بعد رصد حركة.",
-    hydraulicFired: "تفعيل المنصة الهيدروليكية", hydraulicFiredDesc: "تم رفع منصة الإنقاذ بأمر الذكاء الاصطناعي.",
-    yesterday: "أمس",
+    titleDrownSuspect: "اشتباه غرق",
+    titleDrownCritical: "تم اكتشاف غرق — تنفيذ الإنقاذ",
+    titleChildNear: "طفل بالقرب من المسبح",
+    titleRoutine: "فحص دوري ناجح",
+    titleCamStart: "تشغيل الكاميرا",
+    descChildNear: "حساس المسافة رصد اقتراب.",
+    descRoutine: "جميع الحساسات تعمل بشكل سليم.",
+    descCamStart: "بدء البث بعد رصد حركة.",
+    yesterday: "أمس", justNow: "الآن",
   },
 };
 
-type Stage = "lang" | "login" | "app";
+type Stage = "lang" | "login" | "forgot" | "app";
+type T = typeof dict["en"];
+
+/* ---------- Seed incidents ---------- */
+
+const seedIncidents = (): Incident[] => {
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  return [
+    { id: "s1", kind: "child_near", severity: "warning", timestamp: now - day + 2 * 3600 * 1000, actions: ["notification"], confidence: 92 },
+    { id: "s2", kind: "routine", severity: "info", timestamp: now - day - 4 * 3600 * 1000, actions: [] },
+    { id: "s3", kind: "cam_start", severity: "info", timestamp: now - 2 * day, actions: ["notification"] },
+  ];
+};
+
+/* ---------- Root ---------- */
 
 export function AquaApp() {
   const [stage, setStage] = useState<Stage>("lang");
   const [lang, setLang] = useState<Lang>("en");
   const [tab, setTab] = useState<Tab>("home");
+
+  // shared state
+  const [incidents, setIncidents] = useState<Incident[]>(seedIncidents);
+  const [hydAuto, setHydAuto] = useState(true);
+  const [hydEnabled, setHydEnabled] = useState(true);
+  const [platformDeployed, setPlatformDeployed] = useState(false);
+  const [riskCritical, setRiskCritical] = useState(false);
+
   const t = dict[lang];
   const dir = lang === "ar" ? "rtl" : "ltr";
+
+  const logIncident = useCallback((inc: Omit<Incident, "id" | "timestamp">) => {
+    setIncidents((prev) => [
+      { ...inc, id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, timestamp: Date.now() },
+      ...prev,
+    ]);
+  }, []);
+
+  // Core link: AI drowning decision → hydraulic auto-trigger (zero delay)
+  const triggerDrowningDetection = useCallback((confidence = 96) => {
+    setRiskCritical(true);
+    const actions: ActionKey[] = ["alarm", "notification"];
+    const willAutoDeploy = hydEnabled && hydAuto;
+    if (willAutoDeploy) {
+      // immediate, synchronous activation — no setTimeout
+      setPlatformDeployed(true);
+      actions.unshift("platform");
+    }
+    logIncident({
+      kind: willAutoDeploy ? "drowning_critical" : "drowning_suspect",
+      severity: "danger",
+      actions,
+      confidence,
+    });
+    // auto-clear risk after short demo window
+    window.setTimeout(() => setRiskCritical(false), 6000);
+  }, [hydEnabled, hydAuto, logIncident]);
 
   return (
     <div className="min-h-screen bg-hero py-0 md:py-10" dir={dir} lang={lang}>
@@ -128,17 +241,54 @@ export function AquaApp() {
             )}
 
             {stage === "login" && (
-              <LoginScreen t={t} lang={lang} setLang={setLang} onSignIn={() => setStage("app")} />
+              <LoginScreen
+                t={t}
+                lang={lang}
+                setLang={setLang}
+                onSignIn={() => setStage("app")}
+                onForgot={() => setStage("forgot")}
+              />
+            )}
+
+            {stage === "forgot" && (
+              <ForgotScreen t={t} onBack={() => setStage("login")} />
             )}
 
             {stage === "app" && (
               <>
-                <AppHeader tab={tab} t={t} />
+                <AppHeader tab={tab} t={t} hasUnread={incidents.some((i) => i.severity === "danger")} />
                 <div className="pb-28">
-                  {tab === "home" && <HomeScreen t={t} onOpenLive={() => setTab("live")} />}
-                  {tab === "live" && <LiveScreen t={t} />}
-                  {tab === "alerts" && <AlertsScreen t={t} />}
-                  {tab === "settings" && <SettingsScreen t={t} lang={lang} setLang={setLang} />}
+                  {tab === "home" && (
+                    <HomeScreen
+                      t={t}
+                      onOpenLive={() => setTab("live")}
+                      hydAuto={hydAuto}
+                      setHydAuto={setHydAuto}
+                      hydEnabled={hydEnabled}
+                      platformDeployed={platformDeployed}
+                      setPlatformDeployed={setPlatformDeployed}
+                      riskCritical={riskCritical}
+                    />
+                  )}
+                  {tab === "live" && (
+                    <LiveScreen
+                      t={t}
+                      riskCritical={riskCritical}
+                      onSimulate={() => triggerDrowningDetection(97)}
+                    />
+                  )}
+                  {tab === "alerts" && <AlertsScreen t={t} incidents={incidents} lang={lang} />}
+                  {tab === "settings" && (
+                    <SettingsScreen
+                      t={t}
+                      lang={lang}
+                      setLang={setLang}
+                      hydEnabled={hydEnabled}
+                      setHydEnabled={setHydEnabled}
+                      hydAuto={hydAuto}
+                      setHydAuto={setHydAuto}
+                    />
+                  )}
                 </div>
                 <BottomNav tab={tab} setTab={setTab} t={t} />
               </>
@@ -149,8 +299,6 @@ export function AquaApp() {
     </div>
   );
 }
-
-type T = typeof dict["en"];
 
 /* ---------- Chrome ---------- */
 
@@ -167,7 +315,7 @@ function StatusBar() {
   );
 }
 
-function AppHeader({ tab, t }: { tab: Tab; t: T }) {
+function AppHeader({ tab, t, hasUnread }: { tab: Tab; t: T; hasUnread: boolean }) {
   const titles: Record<Tab, string> = {
     home: t.home, live: t.live, alerts: t.alerts, settings: t.settings,
   };
@@ -184,7 +332,7 @@ function AppHeader({ tab, t }: { tab: Tab; t: T }) {
       </div>
       <button className="relative grid h-10 w-10 place-items-center rounded-xl border border-border/60 bg-card/50">
         <Bell className="h-4 w-4 text-foreground/80" />
-        <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger" />
+        {hasUnread && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger" />}
       </button>
     </div>
   );
@@ -233,8 +381,8 @@ function LanguageScreen({ lang, setLang, onNext }: { lang: Lang; setLang: (l: La
       <div className="mb-10 text-sm text-muted-foreground">{t.chooseLang}</div>
 
       <div className="w-full max-w-xs space-y-3">
-        <LangOption code="en" active={lang === "en"} onClick={() => setLang("en")} label="English" sub="EN" />
-        <LangOption code="ar" active={lang === "ar"} onClick={() => setLang("ar")} label="العربية" sub="AR" />
+        <LangOption active={lang === "en"} onClick={() => setLang("en")} label="English" sub="EN" />
+        <LangOption active={lang === "ar"} onClick={() => setLang("ar")} label="العربية" sub="AR" />
       </div>
 
       <button
@@ -247,7 +395,7 @@ function LanguageScreen({ lang, setLang, onNext }: { lang: Lang; setLang: (l: La
   );
 }
 
-function LangOption({ code, active, onClick, label, sub }: { code: Lang; active: boolean; onClick: () => void; label: string; sub: string }) {
+function LangOption({ active, onClick, label, sub }: { active: boolean; onClick: () => void; label: string; sub: string }) {
   return (
     <button
       onClick={onClick}
@@ -270,12 +418,59 @@ function LangOption({ code, active, onClick, label, sub }: { code: Lang; active:
 
 /* ---------- Login Screen ---------- */
 
-function LoginScreen({ t, lang, setLang, onSignIn }: { t: T; lang: Lang; setLang: (l: Lang) => void; onSignIn: () => void }) {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// Demo credentials — any other combo "fails" auth to demonstrate failure handling.
+const DEMO_EMAIL = "demo@aquaguard.app";
+const DEMO_PASSWORD = "aquaguard2026";
+
+function LoginScreen({
+  t, lang, setLang, onSignIn, onForgot,
+}: {
+  t: T; lang: Lang; setLang: (l: Lang) => void; onSignIn: () => void; onForgot: () => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [emailErr, setEmailErr] = useState<string | null>(null);
+  const [pwdErr, setPwdErr] = useState<string | null>(null);
+  const [formErr, setFormErr] = useState<string | null>(null);
+
+  const validate = () => {
+    let ok = true;
+    const e = email.trim();
+    if (!e) { setEmailErr(t.errEmailRequired); ok = false; }
+    else if (!EMAIL_RE.test(e) || e.length > 254) { setEmailErr(t.errEmailInvalid); ok = false; }
+    else setEmailErr(null);
+
+    if (!password) { setPwdErr(t.errPasswordRequired); ok = false; }
+    else if (password.length < 8) { setPwdErr(t.errPasswordShort); ok = false; }
+    else setPwdErr(null);
+
+    return ok;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormErr(null);
+    if (!validate()) return;
+    setSubmitting(true);
+    // simulate auth round-trip
+    await new Promise((r) => setTimeout(r, 700));
+    setSubmitting(false);
+    if (email.trim().toLowerCase() === DEMO_EMAIL && password === DEMO_PASSWORD) {
+      onSignIn();
+    } else {
+      setFormErr(t.errLoginFailed);
+    }
+  };
+
   return (
-    <div className="relative flex min-h-[800px] flex-col px-6 pb-10 pt-8">
+    <form onSubmit={handleSubmit} className="relative flex min-h-[800px] flex-col px-6 pb-10 pt-8">
       <div className="absolute inset-0 water-grid opacity-30" aria-hidden />
       <div className="relative flex justify-end">
         <button
+          type="button"
           onClick={() => setLang(lang === "ar" ? "en" : "ar")}
           className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/50 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground"
         >
@@ -292,19 +487,53 @@ function LoginScreen({ t, lang, setLang, onSignIn }: { t: T; lang: Lang; setLang
         <div className="mt-1 text-xs text-muted-foreground">{t.loginSub}</div>
       </div>
 
-      <div className="relative mt-10 space-y-3">
-        <LabeledInput icon={Mail} label={t.email} placeholder="name@example.com" />
-        <LabeledInput icon={Lock} label={t.password} placeholder="••••••••" type="password" />
+      <div className="relative mt-8 space-y-3">
+        <ValidatedInput
+          icon={Mail}
+          label={t.email}
+          placeholder="name@example.com"
+          type="email"
+          value={email}
+          onChange={(v) => { setEmail(v); if (emailErr) setEmailErr(null); if (formErr) setFormErr(null); }}
+          error={emailErr}
+          autoComplete="email"
+          inputMode="email"
+        />
+        <ValidatedInput
+          icon={Lock}
+          label={t.password}
+          placeholder="••••••••"
+          type={showPwd ? "text" : "password"}
+          value={password}
+          onChange={(v) => { setPassword(v); if (pwdErr) setPwdErr(null); if (formErr) setFormErr(null); }}
+          error={pwdErr}
+          autoComplete="current-password"
+          trailing={
+            <button type="button" onClick={() => setShowPwd((s) => !s)} className="text-muted-foreground hover:text-aqua">
+              {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          }
+        />
         <div className="flex justify-end">
-          <button className="text-[11px] font-semibold text-aqua">{t.forgot}</button>
+          <button type="button" onClick={onForgot} className="text-[11px] font-semibold text-aqua">
+            {t.forgot}
+          </button>
         </div>
       </div>
 
+      {formErr && (
+        <div className="relative mt-4 flex items-start gap-2 rounded-xl border border-danger/40 bg-danger/10 px-3 py-2.5 text-[11px] text-danger">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="leading-relaxed">{formErr}</span>
+        </div>
+      )}
+
       <button
-        onClick={onSignIn}
-        className="relative mt-6 w-full rounded-2xl bg-aqua-gradient py-3.5 text-sm font-bold text-primary-foreground shadow-glow"
+        type="submit"
+        disabled={submitting}
+        className="relative mt-5 w-full rounded-2xl bg-aqua-gradient py-3.5 text-sm font-bold text-primary-foreground shadow-glow disabled:opacity-60"
       >
-        {t.signIn}
+        {submitting ? "..." : t.signIn}
       </button>
 
       <div className="relative my-5 flex items-center gap-3 text-[10px] text-muted-foreground">
@@ -313,42 +542,171 @@ function LoginScreen({ t, lang, setLang, onSignIn }: { t: T; lang: Lang; setLang
         <div className="h-px flex-1 bg-border/60" />
       </div>
 
-      <button className="relative w-full rounded-2xl border border-border/60 bg-card/40 py-3 text-xs font-semibold">
+      <button type="button" className="relative w-full rounded-2xl border border-border/60 bg-card/40 py-3 text-xs font-semibold">
         {t.signUp}
       </button>
+    </form>
+  );
+}
+
+function ValidatedInput({
+  icon: Icon, label, placeholder, type = "text", value, onChange, error, trailing, autoComplete, inputMode,
+}: {
+  icon: any; label: string; placeholder: string; type?: string;
+  value: string; onChange: (v: string) => void; error?: string | null;
+  trailing?: React.ReactNode; autoComplete?: string; inputMode?: any;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 text-[11px] text-muted-foreground">{label}</div>
+      <div
+        className={`flex items-center gap-2 rounded-2xl border bg-background/60 px-3 py-3 transition-colors ${
+          error ? "border-danger/60" : "border-border/60 focus-within:border-aqua/60"
+        }`}
+      >
+        <Icon className={`h-4 w-4 ${error ? "text-danger" : "text-aqua"}`} />
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          inputMode={inputMode}
+          maxLength={type === "password" ? 128 : 254}
+          className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
+        />
+        {trailing}
+      </div>
+      {error && (
+        <div className="mt-1.5 flex items-center gap-1 text-[10px] text-danger">
+          <AlertTriangle className="h-3 w-3" />
+          {error}
+        </div>
+      )}
     </div>
   );
 }
 
-function LabeledInput({ icon: Icon, label, placeholder, type = "text" }: { icon: any; label: string; placeholder: string; type?: string }) {
+/* ---------- Forgot Password Screen ---------- */
+
+function ForgotScreen({ t, onBack }: { t: T; onBack: () => void }) {
+  const [email, setEmail] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const v = email.trim();
+    if (!v) return setErr(t.errEmailRequired);
+    if (!EMAIL_RE.test(v) || v.length > 254) return setErr(t.errEmailInvalid);
+    setErr(null);
+    setSending(true);
+    await new Promise((r) => setTimeout(r, 900));
+    setSending(false);
+    setSent(true);
+  };
+
   return (
-    <div>
-      <div className="mb-1.5 text-[11px] text-muted-foreground">{label}</div>
-      <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-background/60 px-3 py-3 focus-within:border-aqua/60">
-        <Icon className="h-4 w-4 text-aqua" />
-        <input
-          type={type}
-          placeholder={placeholder}
-          className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
-        />
+    <div className="relative flex min-h-[800px] flex-col px-6 pb-10 pt-8">
+      <div className="absolute inset-0 water-grid opacity-30" aria-hidden />
+
+      <button
+        type="button"
+        onClick={onBack}
+        className="relative flex w-fit items-center gap-1.5 rounded-full border border-border/60 bg-card/50 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground"
+      >
+        <ArrowLeft className="h-3.5 w-3.5 rtl:rotate-180" />
+        {t.backToLogin}
+      </button>
+
+      <div className="relative mt-10 flex flex-col items-center text-center">
+        <div className="grid h-16 w-16 place-items-center rounded-3xl bg-aqua-gradient shadow-glow">
+          <KeyRound className="h-8 w-8 text-primary-foreground" strokeWidth={2.2} />
+        </div>
+        <div className="mt-4 text-xl font-extrabold tracking-tight">
+          {sent ? t.resetSentTitle : t.forgotTitle}
+        </div>
+        <div className="mt-1.5 max-w-xs text-xs leading-relaxed text-muted-foreground">
+          {sent ? t.resetSentSub : t.forgotSub}
+        </div>
       </div>
+
+      {!sent ? (
+        <form onSubmit={submit} className="relative mt-8 space-y-4">
+          <ValidatedInput
+            icon={Mail}
+            label={t.email}
+            placeholder="name@example.com"
+            type="email"
+            value={email}
+            onChange={(v) => { setEmail(v); if (err) setErr(null); }}
+            error={err}
+            autoComplete="email"
+            inputMode="email"
+          />
+          <button
+            type="submit"
+            disabled={sending}
+            className="w-full rounded-2xl bg-aqua-gradient py-3.5 text-sm font-bold text-primary-foreground shadow-glow disabled:opacity-60"
+          >
+            {sending ? t.resending : t.sendLink}
+          </button>
+        </form>
+      ) : (
+        <div className="relative mt-8 space-y-3">
+          <div className="flex items-start gap-3 rounded-2xl border border-aqua/30 bg-aqua/10 p-4">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-aqua-gradient text-primary-foreground">
+              <Mail className="h-5 w-5" />
+            </div>
+            <div className="flex-1 text-[11px] leading-relaxed text-foreground/80">
+              <div className="font-bold text-foreground">{email}</div>
+              <div className="mt-0.5 text-muted-foreground">{t.resetSentSub}</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setSent(false); }}
+            className="w-full rounded-2xl border border-border/60 bg-card/40 py-3 text-xs font-semibold"
+          >
+            {t.resend}
+          </button>
+          <button
+            type="button"
+            onClick={onBack}
+            className="w-full rounded-2xl bg-aqua-gradient py-3 text-xs font-bold text-primary-foreground shadow-glow"
+          >
+            {t.backToLogin}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ---------- Home ---------- */
 
-function HomeScreen({ t, onOpenLive }: { t: T; onOpenLive: () => void }) {
+function HomeScreen({
+  t, onOpenLive, hydAuto, setHydAuto, hydEnabled, platformDeployed, setPlatformDeployed, riskCritical,
+}: {
+  t: T; onOpenLive: () => void;
+  hydAuto: boolean; setHydAuto: (v: boolean) => void;
+  hydEnabled: boolean;
+  platformDeployed: boolean; setPlatformDeployed: (v: boolean) => void;
+  riskCritical: boolean;
+}) {
   return (
     <div className="space-y-5 px-5">
       <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card-gradient p-5 shadow-card-soft">
         <div className="absolute inset-0 water-grid opacity-50" aria-hidden />
         <div className="relative">
           <div className="flex items-center justify-between">
-            <span className="inline-flex items-center gap-2 rounded-full border border-aqua/30 bg-aqua/10 px-3 py-1 text-[11px] text-aqua">
+            <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] ${
+              riskCritical ? "border-danger/40 bg-danger/15 text-danger" : "border-aqua/30 bg-aqua/10 text-aqua"
+            }`}>
               <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-aqua pulse-ring" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-aqua" />
+                <span className={`absolute inline-flex h-full w-full rounded-full pulse-ring ${riskCritical ? "bg-danger" : "bg-aqua"}`} />
+                <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${riskCritical ? "bg-danger" : "bg-aqua"}`} />
               </span>
               {t.systemActive}
             </span>
@@ -356,12 +714,16 @@ function HomeScreen({ t, onOpenLive }: { t: T; onOpenLive: () => void }) {
           </div>
 
           <div className="mt-5 flex items-end gap-3">
-            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-aqua-gradient shadow-glow">
-              <CheckCircle2 className="h-7 w-7 text-primary-foreground" strokeWidth={2.4} />
+            <div className={`grid h-14 w-14 place-items-center rounded-2xl shadow-glow ${riskCritical ? "bg-danger" : "bg-aqua-gradient"}`}>
+              {riskCritical
+                ? <AlertTriangle className="h-7 w-7 text-primary-foreground" strokeWidth={2.4} />
+                : <CheckCircle2 className="h-7 w-7 text-primary-foreground" strokeWidth={2.4} />}
             </div>
             <div>
               <div className="text-[11px] text-muted-foreground">{t.poolStatus}</div>
-              <div className="text-2xl font-extrabold tracking-tight">{t.safe}</div>
+              <div className="text-2xl font-extrabold tracking-tight">
+                {riskCritical ? t.titleDrownCritical : t.safe}
+              </div>
             </div>
           </div>
 
@@ -399,8 +761,14 @@ function HomeScreen({ t, onOpenLive }: { t: T; onOpenLive: () => void }) {
         </div>
       </button>
 
-      {/* Hydraulic system card */}
-      <HydraulicCard t={t} />
+      <HydraulicCard
+        t={t}
+        auto={hydAuto}
+        setAuto={setHydAuto}
+        enabled={hydEnabled}
+        deployed={platformDeployed}
+        setDeployed={setPlatformDeployed}
+      />
 
       <div className="rounded-3xl border border-border/60 bg-card-gradient p-5">
         <div className="flex items-center justify-between">
@@ -418,21 +786,25 @@ function HomeScreen({ t, onOpenLive }: { t: T; onOpenLive: () => void }) {
           <AiRow icon={Radar} label={t.distSensor} value="3.2m" />
         </div>
       </div>
-
     </div>
   );
 }
 
-function HydraulicCard({ t }: { t: T }) {
-  const [auto, setAuto] = useState(true);
-  const [deployed, setDeployed] = useState(false);
+function HydraulicCard({
+  t, auto, setAuto, enabled, deployed, setDeployed,
+}: {
+  t: T; auto: boolean; setAuto: (v: boolean) => void; enabled: boolean;
+  deployed: boolean; setDeployed: (v: boolean) => void;
+}) {
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-aqua/30 bg-card-gradient p-5 shadow-card-soft">
+    <div className={`relative overflow-hidden rounded-3xl border bg-card-gradient p-5 shadow-card-soft ${
+      deployed ? "border-danger/50" : "border-aqua/30"
+    }`}>
       <div className="absolute inset-0 water-grid opacity-40" aria-hidden />
       <div className="relative">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-aqua-gradient shadow-glow">
+            <div className={`grid h-10 w-10 place-items-center rounded-xl shadow-glow ${deployed ? "bg-danger" : "bg-aqua-gradient"}`}>
               <LifeBuoy className="h-5 w-5 text-primary-foreground" strokeWidth={2.4} />
             </div>
             <div>
@@ -441,32 +813,37 @@ function HydraulicCard({ t }: { t: T }) {
             </div>
           </div>
           <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold ${
-            deployed ? "bg-danger/20 text-danger" : "bg-aqua/15 text-aqua"
+            deployed ? "bg-danger/20 text-danger" : enabled ? "bg-aqua/15 text-aqua" : "bg-muted/40 text-muted-foreground"
           }`}>
-            <Zap className="h-3 w-3" /> {deployed ? t.deploy : t.armed}
+            <Zap className="h-3 w-3" />
+            {deployed ? t.deployed : enabled ? t.armed : t.standby}
           </span>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <MiniStat label={t.liftStatus} value={deployed ? t.deploy : t.retracted} />
+          <MiniStat label={t.liftStatus} value={deployed ? t.deployed : t.retracted} />
           <MiniStat label={t.responseTime} value="< 2s" />
         </div>
 
         <div className="mt-4 flex items-center justify-between rounded-xl bg-background/40 px-3 py-2.5">
-          <span className="text-[11px]">{t.autoMode}</span>
+          <div className="flex-1 pe-2">
+            <div className="text-[11px] font-semibold">{t.autoMode}</div>
+            <div className="text-[10px] text-muted-foreground">{t.aiAutoTriggerSub}</div>
+          </div>
           <Toggle on={auto} onChange={setAuto} />
         </div>
 
         <button
-          onClick={() => setDeployed((d) => !d)}
-          className={`mt-3 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-xs font-bold ${
+          onClick={() => setDeployed(!deployed)}
+          disabled={!enabled}
+          className={`mt-3 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-xs font-bold disabled:opacity-50 ${
             deployed
               ? "bg-danger/15 border border-danger/40 text-danger"
               : "bg-aqua-gradient text-primary-foreground shadow-glow"
           }`}
         >
           <Power className="h-4 w-4" />
-          {deployed ? t.manualOverride : t.deploy}
+          {deployed ? t.retract : t.deploy}
         </button>
       </div>
     </div>
@@ -492,36 +869,23 @@ function Stat({ label, value, icon: Icon }: { label: string; value: string; icon
   );
 }
 
-function AiRow({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+function AiRow({ icon: Icon, label, value, tone }: { icon: any; label: string; value: string; tone?: "danger" | "default" }) {
   return (
-    <div className="flex items-center justify-between rounded-xl bg-background/40 px-3 py-2.5">
+    <div className={`flex items-center justify-between rounded-xl px-3 py-2.5 ${
+      tone === "danger" ? "bg-danger/15 border border-danger/30" : "bg-background/40"
+    }`}>
       <div className="flex items-center gap-2.5">
-        <Icon className="h-4 w-4 text-aqua" />
+        <Icon className={`h-4 w-4 ${tone === "danger" ? "text-danger" : "text-aqua"}`} />
         <span className="text-xs">{label}</span>
       </div>
-      <span className="text-xs font-semibold">{value}</span>
+      <span className={`text-xs font-semibold ${tone === "danger" ? "text-danger" : ""}`}>{value}</span>
     </div>
-  );
-}
-
-function QuickAction({ icon: Icon, title, sub, tone }: { icon: any; title: string; sub: string; tone: "danger" | "aqua" }) {
-  const bg = tone === "danger" ? "bg-danger/15 border-danger/30 text-danger" : "bg-aqua/10 border-aqua/30 text-aqua";
-  return (
-    <button className={`flex items-center gap-3 rounded-2xl border p-4 text-start ${bg}`}>
-      <div className="grid h-10 w-10 place-items-center rounded-xl bg-background/40">
-        <Icon className="h-5 w-5" />
-      </div>
-      <div className="flex-1">
-        <div className="text-sm font-bold text-foreground">{title}</div>
-        <div className="text-[10px] text-muted-foreground">{sub}</div>
-      </div>
-    </button>
   );
 }
 
 /* ---------- Live ---------- */
 
-function LiveScreen({ t }: { t: T }) {
+function LiveScreen({ t, riskCritical, onSimulate }: { t: T; riskCritical: boolean; onSimulate: () => void }) {
   return (
     <div className="space-y-4 px-5">
       <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
@@ -531,9 +895,13 @@ function LiveScreen({ t }: { t: T }) {
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE · 00:42
         </div>
         <div className="absolute start-3 top-3 rounded-full bg-background/60 px-2.5 py-1 text-[10px] backdrop-blur">HD · 60fps</div>
-        <div className="absolute bottom-1/3 left-1/2 h-24 w-24 -translate-x-1/2 rounded-md border-2 border-aqua shadow-glow">
-          <span className="absolute -top-5 left-0 rounded bg-aqua px-1.5 py-0.5 text-[9px] font-bold text-primary-foreground">
-            CHILD · 98%
+        <div className={`absolute bottom-1/3 left-1/2 h-24 w-24 -translate-x-1/2 rounded-md border-2 shadow-glow ${
+          riskCritical ? "border-danger animate-pulse" : "border-aqua"
+        }`}>
+          <span className={`absolute -top-5 left-0 rounded px-1.5 py-0.5 text-[9px] font-bold text-primary-foreground ${
+            riskCritical ? "bg-danger" : "bg-aqua"
+          }`}>
+            {riskCritical ? "DROWNING · 97%" : "CHILD · 98%"}
           </span>
         </div>
         <div className="absolute inset-x-3 bottom-3 flex items-center justify-between rounded-2xl bg-background/70 px-3 py-2.5 backdrop-blur">
@@ -555,73 +923,200 @@ function LiveScreen({ t }: { t: T }) {
       <div className="rounded-2xl border border-border/60 bg-card-gradient p-4">
         <div className="text-xs font-bold">{t.instantAnalysis}</div>
         <div className="mt-3 space-y-2.5">
-          <AiRow icon={Activity} label={t.riskLevel} value={t.low} />
+          <AiRow
+            icon={Activity}
+            label={t.riskLevel}
+            value={riskCritical ? t.critical : t.low}
+            tone={riskCritical ? "danger" : "default"}
+          />
+        </div>
+      </div>
+
+      {/* Simulate AI → hydraulic chain */}
+      <button
+        onClick={onSimulate}
+        className="flex w-full items-center gap-3 rounded-2xl border border-danger/40 bg-danger/10 p-4 text-start"
+      >
+        <div className="grid h-10 w-10 place-items-center rounded-xl bg-danger/20 text-danger">
+          <Zap className="h-5 w-5" />
+        </div>
+        <div className="flex-1">
+          <div className="text-sm font-bold text-danger">{t.simulate}</div>
+          <div className="text-[10px] text-muted-foreground">{t.simulateSub}</div>
+        </div>
+      </button>
+    </div>
+  );
+}
+
+/* ---------- Alerts (detailed incidents log) ---------- */
+
+function AlertsScreen({ t, incidents, lang }: { t: T; incidents: Incident[]; lang: Lang }) {
+  const [filter, setFilter] = useState<"all" | IncidentSeverity>("all");
+  const filters: { id: "all" | IncidentSeverity; label: string }[] = [
+    { id: "all", label: t.all },
+    { id: "danger", label: t.critical },
+    { id: "warning", label: t.warning },
+    { id: "info", label: t.info },
+  ];
+  const filtered = filter === "all" ? incidents : incidents.filter((i) => i.severity === filter);
+
+  return (
+    <div className="space-y-3 px-5">
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {filters.map((f) => {
+          const active = filter === f.id;
+          return (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-semibold ${
+                active ? "bg-aqua-gradient text-primary-foreground shadow-glow" : "border border-border/60 bg-card/50 text-muted-foreground"
+              }`}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="rounded-2xl border border-border/60 bg-card-gradient p-6 text-center text-xs text-muted-foreground">
+          {t.noIncidents}
+        </div>
+      )}
+
+      {filtered.map((inc) => (
+        <IncidentCard key={inc.id} inc={inc} t={t} lang={lang} />
+      ))}
+    </div>
+  );
+}
+
+function IncidentCard({ inc, t, lang }: { inc: Incident; t: T; lang: Lang }) {
+  const meta = incidentMeta(inc.kind, t);
+  const sevCls =
+    inc.severity === "danger" ? "bg-danger/15 text-danger border-danger/40"
+    : inc.severity === "warning" ? "bg-aqua/15 text-aqua border-aqua/40"
+    : "bg-muted/40 text-muted-foreground border-border/60";
+
+  const sevLabel =
+    inc.severity === "danger" ? t.critical : inc.severity === "warning" ? t.warning : t.info;
+
+  return (
+    <div className={`rounded-2xl border bg-card-gradient p-4 ${
+      inc.severity === "danger" ? "border-danger/40" : "border-border/60"
+    }`}>
+      <div className="flex items-start gap-3">
+        <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border ${sevCls}`}>
+          <meta.icon className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-bold truncate">{meta.title}</div>
+            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase ${sevCls}`}>
+              {sevLabel}
+            </span>
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+            <span>{formatTimestamp(inc.timestamp, t, lang)}</span>
+            {typeof inc.confidence === "number" && (
+              <>
+                <span>·</span>
+                <span>AI {inc.confidence}%</span>
+              </>
+            )}
+          </div>
+
+          {meta.desc && <div className="mt-2 text-xs text-muted-foreground">{meta.desc}</div>}
+
+          {/* incident type */}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] text-muted-foreground">{t.incidentType}:</span>
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${sevCls}`}>
+              {meta.typeLabel}
+            </span>
+          </div>
+
+          {/* actions executed */}
+          {inc.actions.length > 0 && (
+            <div className="mt-3 rounded-xl border border-border/60 bg-background/40 p-2.5">
+              <div className="mb-1.5 text-[10px] font-semibold text-muted-foreground">{t.actionsTaken}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {inc.actions.map((a) => <ActionChip key={a} action={a} t={t} />)}
+              </div>
+              {inc.severity === "danger" && inc.actions.includes("platform") && (
+                <div className="mt-2 flex items-center gap-1.5 text-[10px] text-aqua">
+                  <Zap className="h-3 w-3" /> {t.autoChain}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-/* ---------- Alerts ---------- */
-
-function AlertsScreen({ t }: { t: T }) {
-  const alerts = [
-    { tone: "danger", icon: AlertTriangle, title: t.drowningSuspect, time: `${t.yesterday} · 18:32`, desc: t.drownDesc },
-    { tone: "aqua", icon: LifeBuoy, title: t.hydraulicFired, time: `${t.yesterday} · 18:32`, desc: t.hydraulicFiredDesc },
-    { tone: "aqua", icon: ScanFace, title: t.childNear, time: `${t.yesterday} · 16:10`, desc: t.childNearDesc },
-    { tone: "muted", icon: CheckCircle2, title: t.routineOk, time: `${t.yesterday} · 12:00`, desc: t.routineDesc },
-    { tone: "aqua", icon: Camera, title: t.camStart, time: `${t.yesterday} · 09:20`, desc: t.camStartDesc },
-  ] as const;
-
+function ActionChip({ action, t }: { action: ActionKey; t: T }) {
+  const map = {
+    platform: { icon: LifeBuoy, label: t.actPlatform, cls: "bg-aqua/15 text-aqua border-aqua/40" },
+    alarm: { icon: Volume2, label: t.actAlarm, cls: "bg-danger/15 text-danger border-danger/40" },
+    notification: { icon: Smartphone, label: t.actNotification, cls: "bg-muted/40 text-foreground border-border/60" },
+  } as const;
+  const a = map[action];
   return (
-    <div className="space-y-3 px-5">
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {[t.all, t.critical, t.warning, t.info].map((label, i) => (
-          <button
-            key={label}
-            className={`whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-semibold ${
-              i === 0 ? "bg-aqua-gradient text-primary-foreground" : "border border-border/60 bg-card/50 text-muted-foreground"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {alerts.map((a, i) => {
-        const toneCls =
-          a.tone === "danger" ? "bg-danger/15 text-danger border-danger/30" :
-          a.tone === "aqua" ? "bg-aqua/10 text-aqua border-aqua/30" :
-          "bg-muted/40 text-muted-foreground border-border/60";
-        return (
-          <div key={i} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-card-gradient p-4">
-            <div className={`grid h-10 w-10 place-items-center rounded-xl border ${toneCls}`}>
-              <a.icon className="h-5 w-5" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-bold">{a.title}</div>
-                <ChevronLeft className="h-4 w-4 text-muted-foreground rtl:rotate-180" />
-              </div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground">{a.time}</div>
-              <div className="mt-1.5 text-xs text-muted-foreground">{a.desc}</div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${a.cls}`}>
+      <a.icon className="h-3 w-3" />
+      {a.label}
+    </span>
   );
+}
+
+function incidentMeta(kind: IncidentKind, t: T): { icon: any; title: string; desc?: string; typeLabel: string } {
+  switch (kind) {
+    case "drowning_critical":
+      return { icon: AlertTriangle, title: t.titleDrownCritical, typeLabel: t.titleDrownCritical };
+    case "drowning_suspect":
+      return { icon: AlertTriangle, title: t.titleDrownSuspect, typeLabel: t.titleDrownSuspect };
+    case "child_near":
+      return { icon: ScanFace, title: t.titleChildNear, desc: t.descChildNear, typeLabel: t.titleChildNear };
+    case "cam_start":
+      return { icon: Camera, title: t.titleCamStart, desc: t.descCamStart, typeLabel: t.titleCamStart };
+    case "routine":
+    default:
+      return { icon: CheckCircle2, title: t.titleRoutine, desc: t.descRoutine, typeLabel: t.titleRoutine };
+  }
+}
+
+function formatTimestamp(ts: number, t: T, lang: Lang): string {
+  const d = new Date(ts);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  const yesterday = new Date(now.getTime() - 86400000).toDateString() === d.toDateString();
+  const time = d.toLocaleTimeString(lang === "ar" ? "ar-EG" : "en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+  if (sameDay) {
+    const diffMin = Math.round((now.getTime() - ts) / 60000);
+    if (diffMin < 1) return t.justNow;
+    return `${time}`;
+  }
+  if (yesterday) return `${t.yesterday} · ${time}`;
+  return d.toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", { day: "2-digit", month: "short" }) + ` · ${time}`;
 }
 
 /* ---------- Settings ---------- */
 
-function SettingsScreen({ t, lang, setLang }: { t: T; lang: Lang; setLang: (l: Lang) => void }) {
+function SettingsScreen({
+  t, lang, setLang, hydEnabled, setHydEnabled, hydAuto, setHydAuto,
+}: {
+  t: T; lang: Lang; setLang: (l: Lang) => void;
+  hydEnabled: boolean; setHydEnabled: (v: boolean) => void;
+  hydAuto: boolean; setHydAuto: (v: boolean) => void;
+}) {
   const [camOn, setCamOn] = useState(true);
   const [sensorOn, setSensorOn] = useState(true);
   const [aiAlert, setAiAlert] = useState(true);
   const [soundAlert, setSoundAlert] = useState(true);
-  const [hydOn, setHydOn] = useState(true);
-  const [hydAuto, setHydAuto] = useState(true);
   const [sensitivity, setSensitivity] = useState<"low" | "mid" | "high">("mid");
   const [alertType, setAlertType] = useState<"all" | "push" | "sound">("all");
   const [range, setRange] = useState(120);
@@ -629,7 +1124,6 @@ function SettingsScreen({ t, lang, setLang }: { t: T; lang: Lang; setLang: (l: L
 
   return (
     <div className="space-y-5 px-5">
-      {/* Language */}
       <SettingsCard icon={Globe} title={t.language}>
         <Segmented
           value={lang}
@@ -641,10 +1135,12 @@ function SettingsScreen({ t, lang, setLang }: { t: T; lang: Lang; setLang: (l: L
         />
       </SettingsCard>
 
-      {/* Hydraulic */}
       <SettingsCard icon={LifeBuoy} title={t.hydraulicSettings}>
-        <ToggleRow label={t.enableHydraulic} on={hydOn} onChange={setHydOn} />
-        <ToggleRow label={t.aiAutoTrigger} on={hydAuto} onChange={setHydAuto} />
+        <ToggleRow label={t.enableHydraulic} on={hydEnabled} onChange={setHydEnabled} />
+        <div>
+          <ToggleRow label={t.aiAutoTrigger} on={hydAuto} onChange={setHydAuto} />
+          <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{t.aiAutoTriggerSub}</div>
+        </div>
         <Field label={t.responseTime}>
           <Segmented
             value="fast"
@@ -659,7 +1155,6 @@ function SettingsScreen({ t, lang, setLang }: { t: T; lang: Lang; setLang: (l: L
         <button className="text-[11px] font-semibold text-aqua">{t.calibrate}</button>
       </SettingsCard>
 
-      {/* Camera */}
       <SettingsCard icon={Camera} title={t.cameraSettings}>
         <ToggleRow label={t.enableCam} on={camOn} onChange={setCamOn} />
         <Field label={t.rtsp}>
@@ -683,7 +1178,6 @@ function SettingsScreen({ t, lang, setLang }: { t: T; lang: Lang; setLang: (l: L
         <button className="text-[11px] font-semibold text-aqua">{t.calibrateCam}</button>
       </SettingsCard>
 
-      {/* Distance sensor */}
       <SettingsCard icon={Radar} title={t.distanceSensor}>
         <ToggleRow label={t.enableSensor} on={sensorOn} onChange={setSensorOn} />
         <Field label={`${t.range}: ${range} cm`}>
@@ -696,7 +1190,6 @@ function SettingsScreen({ t, lang, setLang }: { t: T; lang: Lang; setLang: (l: L
         </div>
       </SettingsCard>
 
-      {/* Alerts */}
       <SettingsCard icon={Bell} title={t.alertsSettings}>
         <ToggleRow label={t.aiAlert} on={aiAlert} onChange={setAiAlert} />
         <ToggleRow label={t.soundAlert} on={soundAlert} onChange={setSoundAlert} />
@@ -800,17 +1293,13 @@ function Slider({ value, min, max, onChange }: { value: number; min: number; max
         className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-aqua-gradient"
         style={{ insetInlineStart: 0, width: `${pct}%` }}
       />
-      <div
-        className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-aqua bg-background shadow-glow"
-        style={{ insetInlineStart: `calc(${pct}% - 8px)` }}
-      />
       <input
         type="range"
         min={min}
         max={max}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="absolute inset-0 w-full cursor-pointer opacity-0"
+        className="absolute inset-0 w-full cursor-pointer appearance-none bg-transparent opacity-0"
       />
     </div>
   );
