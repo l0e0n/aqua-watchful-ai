@@ -419,9 +419,6 @@ function HomeScreen({ t, onOpenLive }: { t: T; onOpenLive: () => void }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3">
-        <QuickAction icon={BellRing} title={t.testAlert} sub={t.testSub} tone="aqua" />
-      </div>
     </div>
   );
 }
