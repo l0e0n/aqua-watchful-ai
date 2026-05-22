@@ -365,8 +365,7 @@ function HomeScreen({ t, onOpenLive }: { t: T; onOpenLive: () => void }) {
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-2 text-center">
-            <Stat label={t.temp} value="27°" icon={ThermometerSun} />
+          <div className="mt-5 grid grid-cols-2 gap-2 text-center">
             <Stat label={t.motion} value={t.calm} icon={Activity} />
             <Stat label={t.camera} value="HD" icon={Camera} />
           </div>
@@ -420,9 +419,6 @@ function HomeScreen({ t, onOpenLive }: { t: T; onOpenLive: () => void }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3">
-        <QuickAction icon={BellRing} title={t.testAlert} sub={t.testSub} tone="aqua" />
-      </div>
     </div>
   );
 }
