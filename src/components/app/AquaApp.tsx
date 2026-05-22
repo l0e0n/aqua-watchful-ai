@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import {
-  Shield, Home, Bell, Settings, Video, BellRing,
-  ThermometerSun, Activity, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight,
+  Shield, Home, Bell, Settings, Video,
+  Activity, AlertTriangle, CheckCircle2, ChevronRight,
   Wifi, Battery, Signal, Play, Pause, Maximize2, ScanFace, Brain,
   Radar, Camera, LifeBuoy, Globe, Lock, Mail, ArrowRight, Zap, Power,
   Eye, EyeOff, KeyRound, ArrowLeft, Smartphone, Volume2,
