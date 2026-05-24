@@ -946,7 +946,7 @@ function AiRow({ icon: Icon, label, value, tone }: { icon: any; label: string; v
 
 /* ---------- Live ---------- */
 
-function LiveScreen({ t, riskCritical, onSimulate }: { t: T; riskCritical: boolean; onSimulate: () => void }) {
+function LiveScreen({ t, riskCritical }: { t: T; riskCritical: boolean }) {
   return (
     <div className="space-y-4 px-5">
       <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
