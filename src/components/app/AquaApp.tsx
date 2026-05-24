@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Shield, Home, Bell, Settings, Video,
   Activity, AlertTriangle, CheckCircle2, ChevronRight,
