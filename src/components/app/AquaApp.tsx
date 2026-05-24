@@ -286,9 +286,9 @@ export function AquaApp() {
                     <LiveScreen
                       t={t}
                       riskCritical={riskCritical}
-                      onSimulate={() => triggerDrowningDetection(97)}
                     />
                   )}
+
                   {tab === "alerts" && <AlertsScreen t={t} incidents={incidents} lang={lang} />}
                   {tab === "settings" && (
                     <SettingsScreen
