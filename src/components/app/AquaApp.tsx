@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Shield, Home, Bell, Settings, Video,
   Activity, AlertTriangle, CheckCircle2, ChevronRight,
@@ -7,6 +7,8 @@ import {
   Eye, EyeOff, KeyRound, ArrowLeft, Smartphone, Volume2,
 } from "lucide-react";
 import heroPool from "@/assets/hero-pool.jpg";
+import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 
 type Tab = "home" | "live" | "alerts" | "settings";
 type Lang = "en" | "ar";
@@ -35,7 +37,7 @@ const dict = {
     loginSub: "Protect what matters most.",
     email: "Email", password: "Password",
     signIn: "Sign in", forgot: "Forgot password?",
-    or: "or", signUp: "Create new account",
+    or: "or", signUp: "Create new account", continueWithGoogle: "Continue with Google",
     // validation
     errEmailRequired: "Email is required.",
     errEmailInvalid: "Please enter a valid email address.",
@@ -109,7 +111,7 @@ const dict = {
     loginSub: "احمِ ما يهمك أكثر.",
     email: "البريد الإلكتروني", password: "كلمة المرور",
     signIn: "تسجيل الدخول", forgot: "نسيت كلمة المرور؟",
-    or: "أو", signUp: "إنشاء حساب جديد",
+    or: "أو", signUp: "إنشاء حساب جديد", continueWithGoogle: "المتابعة باستخدام جوجل",
     errEmailRequired: "البريد الإلكتروني مطلوب.",
     errEmailInvalid: "الرجاء إدخال بريد إلكتروني صالح.",
     errPasswordRequired: "كلمة المرور مطلوبة.",
@@ -191,6 +193,16 @@ export function AquaApp() {
   const [stage, setStage] = useState<Stage>("lang");
   const [lang, setLang] = useState<Lang>("en");
   const [tab, setTab] = useState<Tab>("home");
+
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session) setStage("app");
+    });
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) setStage("app");
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
   // shared state
   const [incidents, setIncidents] = useState<Incident[]>(seedIncidents);
@@ -455,10 +467,47 @@ function LoginScreen({
     setFormErr(null);
     if (!validate()) return;
     setSubmitting(true);
-    // simulate auth round-trip
-    await new Promise((r) => setTimeout(r, 700));
-    setSubmitting(false);
-    // Demo mode: accept any valid email + password (length already validated)
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) {
+        // Try sign-up as a fallback for new users (demo convenience)
+        if (/invalid login credentials/i.test(error.message)) {
+          const { error: signUpErr } = await supabase.auth.signUp({
+            email: email.trim(),
+            password,
+            options: { emailRedirectTo: `${window.location.origin}/` },
+          });
+          if (signUpErr) {
+            setFormErr(signUpErr.message);
+            return;
+          }
+          onSignIn();
+          return;
+        }
+        setFormErr(error.message);
+        return;
+      }
+      onSignIn();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    setFormErr(null);
+    setSubmitting(true);
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin,
+    });
+    if (result.error) {
+      setFormErr(result.error.message || "Google sign-in failed");
+      setSubmitting(false);
+      return;
+    }
+    if (result.redirected) return; // browser will navigate
     onSignIn();
   };
 
@@ -539,7 +588,22 @@ function LoginScreen({
         <div className="h-px flex-1 bg-border/60" />
       </div>
 
-      <button type="button" className="relative w-full rounded-2xl border border-border/60 bg-card/40 py-3 text-xs font-semibold">
+      <button
+        type="button"
+        onClick={handleGoogle}
+        disabled={submitting}
+        className="relative flex w-full items-center justify-center gap-2.5 rounded-2xl border border-border/60 bg-card/60 py-3 text-xs font-semibold disabled:opacity-60"
+      >
+        <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden>
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.56c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.65l-3.56-2.77c-.99.67-2.26 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.11A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.11V7.05H2.18A11 11 0 0 0 1 12c0 1.77.42 3.45 1.18 4.95l3.66-2.84z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.2 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.05l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/>
+        </svg>
+        {t.continueWithGoogle}
+      </button>
+
+      <button type="button" className="relative mt-3 w-full rounded-2xl border border-border/60 bg-card/40 py-3 text-xs font-semibold">
         {t.signUp}
       </button>
     </form>
