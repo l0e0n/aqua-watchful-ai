@@ -993,19 +993,8 @@ function LiveScreen({ t, riskCritical, onSimulate }: { t: T; riskCritical: boole
         </div>
       </div>
 
-      {/* Simulate AI → hydraulic chain */}
-      <button
-        onClick={onSimulate}
-        className="flex w-full items-center gap-3 rounded-2xl border border-danger/40 bg-danger/10 p-4 text-start"
-      >
-        <div className="grid h-10 w-10 place-items-center rounded-xl bg-danger/20 text-danger">
-          <Zap className="h-5 w-5" />
-        </div>
-        <div className="flex-1">
-          <div className="text-sm font-bold text-danger">{t.simulate}</div>
-          <div className="text-[10px] text-muted-foreground">{t.simulateSub}</div>
-        </div>
-      </button>
+
+
     </div>
   );
 }
