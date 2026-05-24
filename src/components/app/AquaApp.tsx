@@ -457,10 +457,47 @@ function LoginScreen({
     setFormErr(null);
     if (!validate()) return;
     setSubmitting(true);
-    // simulate auth round-trip
-    await new Promise((r) => setTimeout(r, 700));
-    setSubmitting(false);
-    // Demo mode: accept any valid email + password (length already validated)
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) {
+        // Try sign-up as a fallback for new users (demo convenience)
+        if (/invalid login credentials/i.test(error.message)) {
+          const { error: signUpErr } = await supabase.auth.signUp({
+            email: email.trim(),
+            password,
+            options: { emailRedirectTo: `${window.location.origin}/` },
+          });
+          if (signUpErr) {
+            setFormErr(signUpErr.message);
+            return;
+          }
+          onSignIn();
+          return;
+        }
+        setFormErr(error.message);
+        return;
+      }
+      onSignIn();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    setFormErr(null);
+    setSubmitting(true);
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin,
+    });
+    if (result.error) {
+      setFormErr(result.error.message || "Google sign-in failed");
+      setSubmitting(false);
+      return;
+    }
+    if (result.redirected) return; // browser will navigate
     onSignIn();
   };
 
