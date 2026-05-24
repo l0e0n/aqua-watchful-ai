@@ -194,6 +194,16 @@ export function AquaApp() {
   const [lang, setLang] = useState<Lang>("en");
   const [tab, setTab] = useState<Tab>("home");
 
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session) setStage("app");
+    });
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) setStage("app");
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
   // shared state
   const [incidents, setIncidents] = useState<Incident[]>(seedIncidents);
   const [hydAuto, setHydAuto] = useState(true);
