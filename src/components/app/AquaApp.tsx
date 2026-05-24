@@ -37,7 +37,7 @@ const dict = {
     loginSub: "Protect what matters most.",
     email: "Email", password: "Password",
     signIn: "Sign in", forgot: "Forgot password?",
-    or: "or", signUp: "Create new account",
+    or: "or", signUp: "Create new account", continueWithGoogle: "Continue with Google",
     // validation
     errEmailRequired: "Email is required.",
     errEmailInvalid: "Please enter a valid email address.",
