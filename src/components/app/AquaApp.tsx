@@ -286,8 +286,10 @@ export function AquaApp() {
                     <LiveScreen
                       t={t}
                       riskCritical={riskCritical}
+                      onDangerDetected={triggerDrowningDetection}
                     />
                   )}
+
 
                   {tab === "alerts" && <AlertsScreen t={t} incidents={incidents} lang={lang} />}
                   {tab === "settings" && (
