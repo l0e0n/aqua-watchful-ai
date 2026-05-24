@@ -458,11 +458,8 @@ function LoginScreen({
     // simulate auth round-trip
     await new Promise((r) => setTimeout(r, 700));
     setSubmitting(false);
-    if (email.trim().toLowerCase() === DEMO_EMAIL && password === DEMO_PASSWORD) {
-      onSignIn();
-    } else {
-      setFormErr(t.errLoginFailed);
-    }
+    // Demo mode: accept any valid email + password (length already validated)
+    onSignIn();
   };
 
   return (
