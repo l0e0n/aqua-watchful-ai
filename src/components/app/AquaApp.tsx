@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Shield, Home, Bell, Settings, Video,
   Activity, AlertTriangle, CheckCircle2, ChevronRight,
@@ -7,6 +7,8 @@ import {
   Eye, EyeOff, KeyRound, ArrowLeft, Smartphone, Volume2,
 } from "lucide-react";
 import heroPool from "@/assets/hero-pool.jpg";
+import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 
 type Tab = "home" | "live" | "alerts" | "settings";
 type Lang = "en" | "ar";
