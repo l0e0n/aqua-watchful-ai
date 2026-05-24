@@ -111,7 +111,7 @@ const dict = {
     loginSub: "احمِ ما يهمك أكثر.",
     email: "البريد الإلكتروني", password: "كلمة المرور",
     signIn: "تسجيل الدخول", forgot: "نسيت كلمة المرور؟",
-    or: "أو", signUp: "إنشاء حساب جديد",
+    or: "أو", signUp: "إنشاء حساب جديد", continueWithGoogle: "المتابعة باستخدام جوجل",
     errEmailRequired: "البريد الإلكتروني مطلوب.",
     errEmailInvalid: "الرجاء إدخال بريد إلكتروني صالح.",
     errPasswordRequired: "كلمة المرور مطلوبة.",
