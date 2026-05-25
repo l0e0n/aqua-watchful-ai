@@ -1,4 +1,3 @@
-import heroPool from "@/assets/hero-pool.jpg";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Play, ShieldCheck } from "lucide-react";
 
@@ -7,13 +6,6 @@ export function Hero() {
     <section id="top" className="relative min-h-[100svh] overflow-hidden bg-hero pt-28">
       <div className="absolute inset-0 water-grid opacity-60" aria-hidden />
       <div className="absolute inset-0">
-        <img
-          src={heroPool}
-          alt="مسبح تحت المراقبة الذكية"
-          width={1600}
-          height={1100}
-          className="h-full w-full object-cover opacity-30"
-        />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-transparent" />
       </div>
 
