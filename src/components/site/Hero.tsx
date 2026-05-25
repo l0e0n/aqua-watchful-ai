@@ -69,8 +69,15 @@ export function Hero() {
           <div className="absolute -inset-6 bg-aqua/20 blur-3xl" aria-hidden />
           <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card-gradient p-2 shadow-card-soft backdrop-blur-xl">
             <div className="relative overflow-hidden rounded-2xl">
-              <img src={heroPool} alt="بث مباشر للمسبح" width={800} height={600} className="aspect-[4/3] w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-deep/80 to-transparent" />
+              <div className="aspect-[4/3] w-full overflow-hidden bg-deep">
+                <iframe
+                  src="https://vdo.ninja/?view=FAiZgaS&cover&autostart&cleanoutput"
+                  title="بث مباشر للمسبح"
+                  allow="autoplay; camera; microphone; fullscreen"
+                  className="h-full w-full border-0"
+                />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-deep/80 to-transparent pointer-events-none" />
               <div className="absolute right-3 top-3 flex items-center gap-2 rounded-full bg-danger/90 px-3 py-1 text-xs font-medium text-destructive-foreground">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
                 LIVE
