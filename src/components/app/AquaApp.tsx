@@ -802,7 +802,9 @@ function HomeScreen({
         className="block w-full overflow-hidden rounded-3xl border border-border/60 bg-card text-start shadow-card-soft"
       >
         <div className="relative">
-          <img src={heroPool} alt="pool" className="aspect-[16/10] w-full object-cover opacity-70" />
+          
+          {/* <img src={heroPool} alt="pool" className="aspect-[16/10] w-full object-cover opacity-70" /> */}
+          
           <div className="absolute inset-0 bg-gradient-to-t from-deep/90 via-deep/30 to-transparent" />
           <div className="absolute end-3 top-3 flex items-center gap-1.5 rounded-full bg-danger/90 px-2.5 py-1 text-[10px] font-bold text-destructive-foreground">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
