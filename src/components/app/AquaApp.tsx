@@ -804,7 +804,25 @@ function HomeScreen({
         <div className="relative">
           
           {/* <img src={heroPool} alt="pool" className="aspect-[16/10] w-full object-cover opacity-70" /> */}
-          
+        <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
+          <div className="aspect-[3/4] w-full bg-deep">
+            <iframe
+              src="https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1"
+              title="iPad live camera"
+              allow="autoplay; camera; microphone; fullscreen"
+              allowFullScreen
+              className="h-full w-full border-0"
+            />
+          </div>
+          <div className="pointer-events-none absolute end-3 top-3 flex items-center gap-1.5 rounded-full bg-danger/90 px-2.5 py-1 text-[10px] font-bold text-destructive-foreground">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
+          </div>
+          <div className="pointer-events-none absolute start-3 top-3 rounded-full bg-background/60 px-2.5 py-1 text-[10px] backdrop-blur">
+            iPad · HD
+          </div>
+        </div>
+
+
           <div className="absolute inset-0 bg-gradient-to-t from-deep/90 via-deep/30 to-transparent" />
           <div className="absolute end-3 top-3 flex items-center gap-1.5 rounded-full bg-danger/90 px-2.5 py-1 text-[10px] font-bold text-destructive-foreground">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
