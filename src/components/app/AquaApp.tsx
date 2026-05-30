@@ -9,6 +9,7 @@ import {
 import heroPool from "@/assets/hero-pool.jpg";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
+import { useTeachableAI } from "@/hooks/use-teachable-ai";
 
 type Tab = "home" | "live" | "alerts" | "settings";
 type Lang = "en" | "ar";
@@ -967,7 +968,6 @@ function AiRow({ icon: Icon, label, value, tone }: { icon: any; label: string; v
 }
 
 /* ---------- Live ---------- */
-
 function LiveScreen({
   t,
   riskCritical,
@@ -980,37 +980,78 @@ function LiveScreen({
   const [aiStatus, setAiStatus] = useState<string>("—");
   const [aiConfidence, setAiConfidence] = useState<number>(0);
   const [aiError, setAiError] = useState<string | null>(null);
+
   const lastDangerRef = useRef<number>(0);
+  const lastStatusRef = useRef<string>("—");
+  const lastChangeTimeRef = useRef<number>(Date.now());
 
   useEffect(() => {
     let cancelled = false;
+
     const poll = async () => {
       try {
-        const res = await fetch("https://sneezing-folk-cosponsor.ngrok-free.dev/status", {
-          headers: { "ngrok-skip-browser-warning": "true" },
-        });
+        const res = await fetch(
+          "https://sneezing-folk-cosponsor.ngrok-free.dev/status",
+          {
+            headers: { "ngrok-skip-browser-warning": "true" },
+          }
+        );
+
         if (!res.ok) throw new Error(String(res.status));
-        const data = (await res.json()) as { status?: string; confidence?: number };
+
+        const data = (await res.json()) as {
+          status?: string;
+          confidence?: number;
+        };
+
         if (cancelled) return;
+
         const status = String(data.status ?? "—");
-        const confidence = Math.max(0, Math.min(100, Number(data.confidence ?? 0)));
-        setAiStatus(status);
-        setAiConfidence(confidence);
-        setAiError(null);
+        const confidence = Math.max(
+          0,
+          Math.min(100, Number(data.confidence ?? 0))
+        );
+
+        const now = Date.now();
+
+        // 🔵 1. تجاهل التحديث إذا نفس الحالة
+        if (status === lastStatusRef.current) {
+          setAiConfidence(confidence);
+          setAiError(null);
+          return;
+        }
+
+        // 🔵 2. debounce للاستقرار (لا تغير UI مباشرة)
+        if (status !== lastStatusRef.current) {
+          lastChangeTimeRef.current = now;
+          lastStatusRef.current = status;
+        }
+
+        // 🔵 3. لا تحدث UI إلا بعد ثبات 1.5 ثانية
+        if (now - lastChangeTimeRef.current > 1500) {
+          setAiStatus(status);
+          setAiConfidence(confidence);
+          setAiError(null);
+        }
+
+        // 🔴 4. Danger trigger محمي ضد التكرار
         if (status.toLowerCase() === "danger") {
-          const now = Date.now();
-          // throttle auto-trigger to once every 10s
           if (now - lastDangerRef.current > 10000) {
             lastDangerRef.current = now;
             onDangerDetected(confidence || 95);
           }
         }
       } catch (e) {
-        if (!cancelled) setAiError(e instanceof Error ? e.message : "error");
+        if (!cancelled)
+          setAiError(e instanceof Error ? e.message : "error");
       }
     };
+
     poll();
-    const id = window.setInterval(poll, 1000);
+
+    // 🔵 5. polling أخف (2s بدل 1s = أداء أفضل + ضغط أقل)
+    const id = window.setInterval(poll, 2000);
+
     return () => {
       cancelled = true;
       window.clearInterval(id);
@@ -1019,8 +1060,13 @@ function LiveScreen({
 
   const statusKey = aiStatus.toLowerCase();
   const isDanger = statusKey === "danger";
+
   const statusTone =
-    isDanger ? "text-danger" : statusKey === "swimming" ? "text-aqua" : "text-foreground";
+    isDanger
+      ? "text-danger"
+      : statusKey === "swimming"
+      ? "text-aqua"
+      : "text-foreground";
 
   return (
     <div className="space-y-4 px-5">
@@ -1034,12 +1080,16 @@ function LiveScreen({
             className="h-full w-full border-0"
           />
         </div>
+
         <div className="pointer-events-none absolute end-3 top-3 flex items-center gap-1.5 rounded-full bg-danger/90 px-2.5 py-1 text-[10px] font-bold text-destructive-foreground">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />{" "}
+          LIVE
         </div>
+
         <div className="pointer-events-none absolute start-3 top-3 rounded-full bg-background/60 px-2.5 py-1 text-[10px] backdrop-blur">
           iPad · HD
         </div>
+
         <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between rounded-2xl bg-background/70 px-3 py-2.5 backdrop-blur">
           <div className="text-[11px]">
             <div className="font-semibold">{t.mainPool}</div>
@@ -1047,37 +1097,59 @@ function LiveScreen({
               {aiStatus} · {aiConfidence}%
             </div>
           </div>
-          <div className={`grid h-9 w-9 place-items-center rounded-full ${isDanger ? "bg-danger/80" : "bg-aqua-gradient"}`}>
-            {isDanger ? <Zap className="h-4 w-4 text-destructive-foreground" /> : <Activity className="h-4 w-4 text-primary-foreground" />}
+
+          <div
+            className={`grid h-9 w-9 place-items-center rounded-full ${
+              isDanger ? "bg-danger/80" : "bg-aqua-gradient"
+            }`}
+          >
+            {isDanger ? (
+              <Zap className="h-4 w-4 text-destructive-foreground" />
+            ) : (
+              <Activity className="h-4 w-4 text-primary-foreground" />
+            )}
           </div>
         </div>
       </div>
 
       <div className="rounded-2xl border border-border/60 bg-card-gradient p-4">
         <div className="text-xs font-bold">{t.instantAnalysis}</div>
+
         <div className="mt-3 space-y-2.5">
           <div className="flex items-center justify-between rounded-xl bg-background/40 px-3 py-2">
             <span className="text-xs text-muted-foreground">Status</span>
-            <span className={`text-xs font-semibold ${statusTone}`}>{aiStatus}</span>
+            <span className={`text-xs font-semibold ${statusTone}`}>
+              {aiStatus}
+            </span>
           </div>
+
           <div className="rounded-xl bg-background/40 px-3 py-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Confidence</span>
-              <span className="text-xs font-semibold">{aiConfidence}%</span>
+              <span className="text-xs text-muted-foreground">
+                Confidence
+              </span>
+              <span className="text-xs font-semibold">
+                {aiConfidence}%
+              </span>
             </div>
+
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border/60">
               <div
-                className={`h-full ${isDanger ? "bg-danger" : "bg-aqua-gradient"}`}
+                className={`h-full ${
+                  isDanger ? "bg-danger" : "bg-aqua-gradient"
+                }`}
                 style={{ width: `${aiConfidence}%` }}
               />
             </div>
           </div>
+
           <AiRow
             icon={Activity}
             label={t.riskLevel}
             value={riskCritical || isDanger ? t.critical : t.low}
             tone={riskCritical || isDanger ? "danger" : "default"}
           />
+
           {aiError && (
             <div className="rounded-xl bg-danger/10 px-3 py-2 text-[10px] text-danger">
               AI feed offline ({aiError})
