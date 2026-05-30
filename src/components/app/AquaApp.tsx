@@ -968,96 +968,94 @@ function AiRow({ icon: Icon, label, value, tone }: { icon: any; label: string; v
 }
 
 /* ---------- Live ---------- */
-function LiveScreen({
-  t,
-  riskCritical,
-  onDangerDetected,
-}: {
-  t: T;
-  riskCritical: boolean;
-  onDangerDetected: (confidence?: number) => void;
-}) {
-  const [aiStatus, setAiStatus] = useState<string>("—");
-  const [aiConfidence, setAiConfidence] = useState<number>(0);
-  const [aiError, setAiError] = useState<string | null>(null);
 
-  const lastDangerRef = useRef<number>(0);
-  const lastStatusRef = useRef<string>("—");
-  const lastChangeTimeRef = useRef<number>(Date.now());
+useEffect(() => {
+  let model: any;
 
-  useEffect(() => {
-    let cancelled = false;
+  const MODEL_URL =
+    "https://teachablemachine.withgoogle.com/models/AIeD8hzch/";
 
-    const poll = async () => {
-      try {
-        const res = await fetch(
-          "https://sneezing-folk-cosponsor.ngrok-free.dev/status",
-          {
-            headers: { "ngrok-skip-browser-warning": "true" },
-          }
-        );
+  const video = document.createElement("video");
+  video.autoplay = true;
+  video.playsInline = true;
+  video.muted = true;
+  video.style.display = "none";
 
-        if (!res.ok) throw new Error(String(res.status));
+  video.src =
+    "https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1";
 
-        const data = (await res.json()) as {
-          status?: string;
-          confidence?: number;
-        };
+  document.body.appendChild(video);
 
-        if (cancelled) return;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
 
-        const status = String(data.status ?? "—");
-        const confidence = Math.max(
-          0,
-          Math.min(100, Number(data.confidence ?? 0))
-        );
+  async function loadModel() {
+    try {
+      model = await tmImage.load(
+        MODEL_URL + "model.json",
+        MODEL_URL + "metadata.json"
+      );
 
-        const now = Date.now();
+      console.log("✅ Model loaded");
+    } catch (err) {
+      console.error("❌ Model load failed", err);
+      setAiError("model failed");
+    }
+  }
 
-        // 🔵 1. تجاهل التحديث إذا نفس الحالة
-        if (status === lastStatusRef.current) {
-          setAiConfidence(confidence);
-          setAiError(null);
-          return;
-        }
+  loadModel();
 
-        // 🔵 2. debounce للاستقرار (لا تغير UI مباشرة)
-        if (status !== lastStatusRef.current) {
-          lastChangeTimeRef.current = now;
-          lastStatusRef.current = status;
-        }
+  const interval = setInterval(async () => {
+    try {
+      if (!model || !video || !ctx) return;
 
-        // 🔵 3. لا تحدث UI إلا بعد ثبات 1.5 ثانية
-        if (now - lastChangeTimeRef.current > 1500) {
-          setAiStatus(status);
-          setAiConfidence(confidence);
-          setAiError(null);
-        }
+      canvas.width = 224;
+      canvas.height = 224;
 
-        // 🔴 4. Danger trigger محمي ضد التكرار
-        if (status.toLowerCase() === "danger") {
-          if (now - lastDangerRef.current > 10000) {
-            lastDangerRef.current = now;
-            onDangerDetected(confidence || 95);
-          }
-        }
-      } catch (e) {
-        if (!cancelled)
-          setAiError(e instanceof Error ? e.message : "error");
+      ctx.drawImage(video, 0, 0, 224, 224);
+
+      const prediction = await model.predict(canvas);
+
+      prediction.sort(
+        (a: any, b: any) => b.probability - a.probability
+      );
+
+      const top = prediction[0];
+
+      const status = top.className;
+      const confidence = Math.round(top.probability * 100);
+
+      setAiStatus(status);
+      setAiConfidence(confidence);
+
+      console.log("AI:", status, confidence);
+
+      // 👶 child near pool
+      if (status === "child near pool" && confidence > 60) {
+        onDangerDetected(confidence);
       }
-    };
 
-    poll();
+      // 🚨 drowning
+      if (status === "drowning" && confidence > 50) {
+        new Audio(
+          "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"
+        ).play();
 
-    // 🔵 5. polling أخف (2s بدل 1s = أداء أفضل + ضغط أقل)
-    const id = window.setInterval(poll, 2000);
+        onDangerDetected(confidence);
+      }
+    } catch (err) {
+      console.error("AI loop error", err);
+      setAiError("AI error");
+    }
+  }, 1000);
 
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, [onDangerDetected]);
+  return () => {
+    clearInterval(interval);
+    video.remove();
+  };
+}, 
 
+[onDangerDetected];
   const statusKey = aiStatus.toLowerCase();
   const isDanger = statusKey === "danger";
 
