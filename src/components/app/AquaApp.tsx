@@ -969,162 +969,123 @@ function AiRow({ icon: Icon, label, value, tone }: { icon: any; label: string; v
 
 /* ---------- Live ---------- */
 
-// مكتبات TensorFlow للتحليل الحقيقي
-const TF_SCRIPT = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js";
-const TM_SCRIPT = "https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js";
+// إذا كانت الأيقونات تسبب لك أخطاء، يمكنك إلغاء تعليق السطر بالأسفل أو استخدام أيقوناتك الخاصة
+// import { Zap, Activity } from "lucide-react"; 
 
-function LiveScreen({ t, onDangerDetected }: any) {
-  const [aiStatus, setAiStatus] = useState("Loading AI Model...");
+interface LiveScreenProps {
+  t: {
+    mainPool: string;
+    instantAnalysis: string;
+  };
+  riskCritical: boolean; // 👈 تم إضافتها هنا لمنع الخطأ الأحمر في الروت
+  onDangerDetected?: (confidence: number) => void;
+}
+
+function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
+  const [aiStatus, setAiStatus] = useState("Connecting to AI Server...");
   const [aiConfidence, setAiConfidence] = useState(0);
   const [aiError, setAiError] = useState<string | null>(null);
-  
-  const modelRef = useRef<any>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // 🧠 رابط نموذج Teachable Machine الخاص بك
-  const URL = "https://teachablemachine.withgoogle.com/models/AIeD8hzch/"; 
+  // رابط البث المباشر من VDO.Ninja يعرض عبر iframe لضمان استقرار التطبيق
+  const streamURL = "https://vdo.ninja/?view=FAiZgaS&autoplay=1&mute=1&cleanoutput=1";
 
   useEffect(() => {
-    const initSystem = async () => {
+    // جلب البيانات من السيرفر المحلي عبر الآيبي الجديد كل ثانية
+    const interval = setInterval(async () => {
       try {
-        // 1. تحميل مكتبات الذكاء الاصطناعي في المتصفح
-        await new Promise((resolve) => {
-          const script = document.createElement("script");
-          script.src = TF_SCRIPT;
-          script.onload = resolve;
-          document.head.appendChild(script);
-        });
+        const response = await fetch("http://192.168.8.101:3000/status");
+        if (!response.ok) throw new Error("Server response error");
+        
+        const data = await response.json();
 
-        await new Promise((resolve) => {
-          const script = document.createElement("script");
-          script.src = TM_SCRIPT;
-          script.onload = resolve;
-          document.head.appendChild(script);
-        });
+        setAiStatus(data.status);
+        setAiConfidence(data.confidence);
+        setAiError(null);
 
-        const windowTM = (window as any).tmImage;
-        if (windowTM) {
-          // 2. تحميل المودل حقك
-          const modelURL = URL + "model.json";
-          const metadataURL = URL + "metadata.json";
-          modelRef.current = await windowTM.load(modelURL, metadataURL);
-          setAiStatus("Connecting to iPad Camera...");
-
-          // 3. ربط بث كاميرا الآيباد مباشرة بعنصر الفيديو
-          connectiPadCamera();
+        // إذا رصد السيرفر حالة خطر (Danger / Drowning) بنسبة أعلى من 80%
+        if (
+          data.status.toLowerCase().includes("danger") || 
+          data.status.toLowerCase().includes("drowning")
+        ) {
+          if (data.confidence > 80) {
+            // تشغيل دالة الروت الأساسية التي تفعل الهيدروليك وتطلق الإنذار فوراً
+            onDangerDetected?.(data.confidence);
+          }
         }
       } catch (err) {
-        setAiError("Failed to initialize AI System");
+        setAiError("Failed to connect to AI Server at 192.168.8.101:3000");
       }
-    };
+    }, 1000);
 
-    initSystem();
-  }, []);
+    return () => clearInterval(interval);
+  }, [onDangerDetected]);
 
-  const connectiPadCamera = () => {
-    if (videoRef.current) {
-      // 🌐 هنا السر: نأخذ رابط البث المباشر (WebRTC/Whip) حق كاميرا الآيباد من VDO.Ninja ونشغله كفيديو حقيقي
-      // ملاحظة: تأكدي من تعديل الرابط بالـ View ID الخاص بالآيباد حقك (هنا استخدمت الـ ID الموجود بكودك القديم FAiZgaS)
-      videoRef.current.src = "https://vdo.ninja/player.html?view=FAiZgaS&autoplay=1&mute=1&cleanoutput=1";
-      
-      videoRef.current.onloadedmetadata = () => {
-        videoRef.current?.play();
-        setAiStatus("Analyzing iPad Feed...");
-        startRealtimeAnalysis();
-      };
-    }
-  };
-
-  // التحليل الفعلي الحقيقي والصادق من كاميرا الآيباد
-  const startRealtimeAnalysis = () => {
-    setInterval(async () => {
-      if (modelRef.current && videoRef.current) {
-        try {
-          // الموديل الحين يحلل بكسلات بث الآيباد مباشرة حياً على الهواء!
-          const prediction = await modelRef.current.predict(videoRef.current);
-          
-          // ترتيب النتائج
-          prediction.sort((a: any, b: any) => b.probability - a.probability);
-          const topResult = prediction[0];
-
-          const currentClass = topResult.className;
-          const currentProb = Math.round(topResult.probability * 100);
-
-          setAiStatus(currentClass);
-          setAiConfidence(currentProb);
-          setAiError(null);
-
-          // إذا رصد المودل خطر حقيقي من كاميرا الآيباد
-          if (currentClass.toLowerCase() === "danger" || currentClass.toLowerCase() === "drowning") {
-            if (currentProb > 80) {
-              onDangerDetected?.(currentProb);
-            }
-          }
-        } catch (err) {
-          // إذا حصل أي قيود نرجعه يقرأ بشكل فوري لتفادي الوقوف أمام اللجنة
-          console.error("Analysis frame error:", err);
-        }
-      }
-    }, 1000); // يحلل فريم حقيقي من الآيباد كل ثانية
-  };
-
+  // تحديد نوع التنبيه بناءً على قراءة السيرفر أو حالة الروت (riskCritical)
   const statusKey = aiStatus.toLowerCase();
-  const isDanger = statusKey === "danger" || statusKey === "drowning";
-  const statusTone = isDanger ? "text-danger" : statusKey === "swimming" ? "text-aqua" : "text-foreground";
+  const isDanger = riskCritical || statusKey.includes("danger") || statusKey.includes("drowning");
+  const isSwimming = statusKey.includes("swimming") || statusKey.includes("safe");
+  
+  const statusTone = isDanger 
+    ? "text-red-500 font-bold" 
+    : isSwimming 
+    ? "text-teal-400 font-bold" 
+    : "text-gray-200 font-bold";
 
   return (
-    <div className="space-y-4 px-5">
-      <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
-        <div className="aspect-[3/4] w-full bg-deep">
-          {/* هنا يعرض بث الآيباد الحقيقي والحي مباشرة */}
-          <video
-            ref={videoRef}
-            className="h-full w-full object-cover"
-            playsInline
-            muted
-            crossOrigin="anonymous"
+    <div className="space-y-4 px-5 text-white">
+      {/* قسم عرض البث المباشر */}
+      <div className="relative overflow-hidden rounded-3xl border border-white/10 shadow-lg">
+        <div className="aspect-[3/4] w-full bg-black">
+          <iframe
+            src={streamURL}
+            className="h-full w-full border-0"
+            allow="autoplay; camera; microphone"
           />
         </div>
-        <div className="pointer-events-none absolute end-3 top-3 flex items-center gap-1.5 rounded-full bg-danger/90 px-2.5 py-1 text-[10px] font-bold text-destructive-foreground">
+        <div className="pointer-events-none absolute end-3 top-3 flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-bold text-white">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
         </div>
-        <div className="pointer-events-none absolute start-3 top-3 rounded-full bg-background/60 px-2.5 py-1 text-[10px] backdrop-blur">
+        <div className="pointer-events-none absolute start-3 top-3 rounded-full bg-black/40 px-2.5 py-1 text-[10px] backdrop-blur">
           iPad Camera · HD
         </div>
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between rounded-2xl bg-background/70 px-3 py-2.5 backdrop-blur">
+        
+        {/* شريط معلومات الحالة السفلي */}
+        <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between rounded-2xl bg-black/60 px-3 py-2.5 backdrop-blur">
           <div className="text-[11px]">
-            <div className="font-semibold">{t.mainPool}</div>
-            <div className={`font-bold ${statusTone}`}>
+            <div className="text-gray-400">{t.mainPool}</div>
+            <div className={statusTone}>
               {aiStatus} · {aiConfidence}%
             </div>
-          </div>
-          <div className={`grid h-9 w-9 place-items-center rounded-full ${isDanger ? "bg-danger/80" : "bg-aqua-gradient"}`}>
-            {isDanger ? <Zap className="h-4 w-4 text-destructive-foreground" /> : <Activity className="h-4 w-4 text-primary-foreground" />}
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border/60 bg-card-gradient p-4">
+      {/* قسم عرض التحليل التفصيلي والنسبة */}
+      <div className="rounded-2xl border border-white/10 bg-gray-900 p-4">
         <div className="text-xs font-bold">{t.instantAnalysis}</div>
         <div className="mt-3 space-y-2.5">
-          <div className="flex items-center justify-between rounded-xl bg-background/40 px-3 py-2">
-            <span className="text-xs text-muted-foreground">Status</span>
-            <span className={`text-xs font-semibold ${statusTone}`}>{aiStatus}</span>
+          <div className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2">
+            <span className="text-xs text-gray-400">Status</span>
+            <span className={`text-xs ${statusTone}`}>{aiStatus}</span>
           </div>
-          <div className="rounded-xl bg-background/40 px-3 py-2">
+          
+          <div className="rounded-xl bg-black/20 px-3 py-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Confidence</span>
+              <span className="text-xs text-gray-400">Confidence</span>
               <span className="text-xs font-semibold">{aiConfidence}%</span>
             </div>
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border/60">
+            {/* شريط النسبة المئوية المتغير */}
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-700">
               <div
-                className={`h-full ${isDanger ? "bg-danger" : "bg-aqua-gradient"}`}
+                className={`h-full transition-all duration-500 ${isDanger ? "bg-red-500" : "bg-teal-400"}`}
                 style={{ width: `${aiConfidence}%` }}
               />
             </div>
           </div>
+          
+          {/* عرض الخطأ في حال عدم الاتصال بالسيرفر */}
           {aiError && (
-            <div className="rounded-xl bg-danger/10 px-3 py-2 text-[10px] text-danger">
+            <div className="rounded-xl bg-red-500/10 px-3 py-2 text-[10px] text-red-400 text-center">
               {aiError}
             </div>
           )}
@@ -1135,7 +1096,6 @@ function LiveScreen({ t, onDangerDetected }: any) {
 }
 
 export default LiveScreen;
-
 /* ---------- Alerts (detailed incidents log) ---------- */
 
 function AlertsScreen({ t, incidents, lang }: { t: T; incidents: Incident[]; lang: Lang }) {
