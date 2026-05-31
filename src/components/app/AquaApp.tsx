@@ -988,7 +988,7 @@ function LiveScreen({
     const video = videoRef.current;
     if (!video) return;
 
-    video.src = "https://vdo.ninja/?view=FAiZgaS&cleanoutput&autostart";
+    video.src = "https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1";
     video.play().catch(() => {});
   }, []);
 
