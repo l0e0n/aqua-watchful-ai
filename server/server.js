@@ -40,7 +40,7 @@ app.get("/", (req, res) => {
 });
 
 // 🧠 AI ANALYZE (هذا أهم جزء)
-app.post("/analyze", upload.single("image"), async (req, res) => {
+app.get("/status", upload.single("image"), async (req, res) => {
   try {
     const model = await getModel();
 

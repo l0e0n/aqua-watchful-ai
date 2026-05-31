@@ -987,7 +987,7 @@ function LiveScreen({
     const interval = setInterval(async () => {
       try {
         const res = await fetch(
-          "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze"
+          "https://sneezing-folk-cosponsor.ngrok-free.dev/status"
         );
 
         if (!res.ok) {
