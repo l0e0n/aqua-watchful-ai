@@ -10,7 +10,7 @@ app.use(cors());
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// 📁 الموديل المحلي
+// 📁 model path
 const MODEL_URL =
   "file://" + path.join(__dirname, "public/model/model.json");
 
@@ -19,22 +19,23 @@ const METADATA_URL =
 
 let model = null;
 
-// 🧠 تحميل الموديل
+// 🧠 load model once
 async function getModel() {
   if (!model) {
     console.log("Loading model...");
     model = await tmImage.load(MODEL_URL, METADATA_URL);
-    console.log("Model loaded");
+    console.log("Model ready");
   }
   return model;
 }
 
-// ❤️ اختبار السيرفر
+// ❤️ test route
 app.get("/", (req, res) => {
   res.json({ status: "server running" });
 });
 
-// 🧠 AI ANALYZE (الأساسي)
+
+// 🧠 MAIN AI ANALYZE (يستقبل صورة)
 app.post("/analyze", upload.single("image"), async (req, res) => {
   try {
     const model = await getModel();
@@ -43,7 +44,7 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       return res.status(400).json({ error: "No image received" });
     }
 
-    console.log("Image received size:", req.file.size);
+    console.log("Image size:", req.file.size);
 
     const imageTensor = tf.node.decodeImage(req.file.buffer, 3);
 
@@ -61,12 +62,13 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     });
 
   } catch (err) {
-    console.error("ERROR:", err.message);
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// 🚀 تشغيل السيرفر
+
+// 🚀 start server
 app.listen(3000, "0.0.0.0", () => {
   console.log("Server running on http://localhost:3000");
 });

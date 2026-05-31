@@ -977,61 +977,42 @@ function LiveScreen({ t, onDangerDetected }: any) {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const iframe = document.querySelector("iframe") as HTMLIFrameElement;
-        if (!iframe) return;
-
-        const video = iframe.contentWindow?.document?.querySelector("video") as HTMLVideoElement;
-        if (!video) return;
-
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-
-        canvas.width = 640;
-        canvas.height = 480;
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        canvas.toBlob(async (blob) => {
-          if (!blob) return;
-
-          const formData = new FormData();
-          formData.append("image", blob, "frame.jpg");
-
-          const res = await fetch(
-            "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze",
-            {
-              method: "POST",
-              body: formData,
-            }
-          );
-
-          const data = await res.json();
-
-          setAiStatus(data.status);
-          setAiConfidence(data.confidence);
-          setAiError(null);
-
-          if (data.status?.toLowerCase() === "danger") {
-            onDangerDetected?.(data.confidence);
+        const res = await fetch(
+          "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze",
+          {
+            method: "POST",
           }
-        }, "image/jpeg");
+        );
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        setAiStatus(data.status);
+        setAiConfidence(data.confidence);
+        setAiError(null);
+
+        if (data.status?.toLowerCase() === "danger") {
+          onDangerDetected?.(data.confidence);
+        }
 
       } catch (err) {
         setAiError("AI feed offline");
       }
-    }, 1500);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [onDangerDetected]);
 
   return (
     <div>
+      {/* 🎥 فقط عرض */}
       <iframe
         src="https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1"
         className="w-full h-[400px]"
       />
 
+      {/* 🧠 AI result */}
       <div>
         <h3>AI Status: {aiStatus}</h3>
         <p>Confidence: {aiConfidence}%</p>
