@@ -979,7 +979,7 @@ function LiveScreen({ t, onDangerDetected }: any) {
     const interval = setInterval(async () => {
       try {
         // نطلب الحالة الحالية الفصيلية من السيرفر المشغل للمودل
-        const res = await fetch("https://sneezing-folk-cosponsor.ngrok-free.dev/status");
+        const res = await fetch("http://localhost:3000/status");
         if (!res.ok) return;
 
         const data = await res.json();
