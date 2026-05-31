@@ -979,21 +979,20 @@ interface LiveScreenProps {
 }
 
 function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
-  // الحفاظ على حالات التصميم الأصلية
+  // حالات التصميم الأصلية
   const [aiStatus, setAiStatus] = useState("Connecting to AI Server...");
   const [aiConfidence, setAiConfidence] = useState(0);
   const [aiError, setAiError] = useState<string | null>(null);
   
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // رابط البث الحي الخاص بالايباد (نفس الرابط الأصلي حقك)
+  // رابط البث الحي الخاص بالايباد المعروض داخل التطبيق
   const streamURL = "https://vdo.ninja/player.html?view=FAiZgaS&autoplay=1&mute=1&cleanoutput=1";
 
   useEffect(() => {
-    // دالة جلب البيانات من السيرفر المحلي كل ثانية
+    // دالة لجلب التحديثات الحية من السيرفر المحلي كل ثانية
     const interval = setInterval(async () => {
       try {
-        // الاتصال بالسيرفر لقراءة الحالة الحالية للذكاء الاصطناعي
         const res = await fetch("http://192.168.8.101:3000/status");
         if (!res.ok) throw new Error();
         const data = await res.json();
@@ -1002,7 +1001,7 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
         setAiConfidence(data.confidence);
         setAiError(null);
 
-        // إذا اكتشف الموديل حالة غرق أو خطر ونسبة اليقين أعلى من 80%، يتم تشغيل الإنذار ورفع الأرضية
+        // إذا كانت الكلمة تحتوي على خطر أو غرق ونسبة اليقين أعلى من 80% يتم إطلاق الإنذار ورفع الأرضية
         const statusLower = data.status.toLowerCase();
         if ((statusLower.includes("danger") || statusLower.includes("drowning") || statusLower.includes("غرق")) && data.confidence > 80) {
           onDangerDetected?.(data.confidence);
@@ -1016,14 +1015,14 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
     return () => clearInterval(interval);
   }, [onDangerDetected]);
 
-  // منطق الألوان الأصلي الخاص بتصميمك دون أي تغيير
+  // منطق الألوان الأصلي الخاص بتصميمك
   const statusKey = aiStatus.toLowerCase();
   const isDanger = riskCritical || statusKey.includes("danger") || statusKey.includes("drowning") || statusKey.includes("غرق");
   const statusTone = isDanger ? "text-danger" : statusKey.includes("swimming") || statusKey.includes("safe") ? "text-aqua" : "text-foreground";
 
   return (
     <div className="space-y-4 px-5">
-      {/* كرت البث الحي - الديزاين الأصلي حقك كاملاً وبنفس الألوان */}
+      {/* كرت البث الحي - الديزاين الأصلي حقك كاملاً */}
       <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
         <div className="aspect-[3/4] w-full bg-deep">
           <iframe
