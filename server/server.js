@@ -1,74 +1,71 @@
 const express = require("express");
 const cors = require("cors");
-const multer = require("multer");
 const tf = require("@tensorflow/tfjs-node");
-const tmImage = require("@teachablemachine/image");
 const path = require("path");
 
 const app = express();
 app.use(cors());
 
-const upload = multer({ storage: multer.memoryStorage() });
+// استقبال الصور الخام بأقصى سرعة
+app.use(express.raw({ type: "image/jpeg", limit: "10mb" }));
 
-// 📁 model path
-const MODEL_URL =
-  "file://" + path.join(__dirname, "public/model/model.json");
-
-const METADATA_URL =
-  "file://" + path.join(__dirname, "public/model/metadata.json");
-
+const MODEL_URL = "file://" + path.join(__dirname, "public/model/model.json");
 let model = null;
 
-// 🧠 load model once
+let currentStatus = "Safe";
+let currentConfidence = 100;
+
 async function getModel() {
   if (!model) {
     console.log("Loading model...");
-    model = await tmImage.load(MODEL_URL, METADATA_URL);
+    model = await tf.loadLayersModel(MODEL_URL);
     console.log("Model ready");
   }
   return model;
 }
 
-// ❤️ test route
-app.get("/", (req, res) => {
-  res.json({ status: "server running" });
-});
-
-
-// 🧠 MAIN AI ANALYZE (يستقبل صورة)
-app.post("/analyze", upload.single("image"), async (req, res) => {
+// استقبال الفريمات الحقيقية من متصفح الآيباد وتحليلها فوراً
+app.post("/analyze-frame", async (req, res) => {
   try {
-    const model = await getModel();
-
-    if (!req.file) {
-      return res.status(400).json({ error: "No image received" });
+    const aiModel = await getModel();
+    if (!req.body || req.body.length === 0) {
+      return res.status(400).json({ error: "No data" });
     }
 
-    console.log("Image size:", req.file.size);
+    // معالجة بايتات الصورة وتحويلها لتنسيق يدعمه المودل
+    let imageTensor = tf.node.decodeImage(req.body, 3);
+    imageTensor = tf.image.resizeBilinear(imageTensor, [224, 224]).div(127.5).sub(1).expandDims(0);
 
-    const imageTensor = tf.node.decodeImage(req.file.buffer, 3);
-
-    const prediction = await model.predict(imageTensor);
+    const prediction = aiModel.predict(imageTensor);
+    const scores = await prediction.data();
 
     imageTensor.dispose();
+    prediction.dispose();
 
-    prediction.sort((a, b) => b.probability - a.probability);
+    // حساب النتيجة الحقيقية (تأكد من ترتيب المصفوفة لديك)
+    if (scores[1] > 0.80) { // كلاس الخطر
+      currentStatus = "Danger";
+      currentConfidence = Math.round(scores[1] * 100);
+    } else {
+      currentStatus = "Safe";
+      currentConfidence = Math.round(scores[0] * 100);
+    }
 
-    const top = prediction[0];
-
-    res.json({
-      status: top.className,
-      confidence: Math.round(top.probability * 100),
-    });
+    console.log(`التحليل المباشر لكاميرا الآيباد: ${currentStatus} (${currentConfidence}%)`);
+    res.json({ status: currentStatus, confidence: currentConfidence });
 
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
+// الرابط الذي سيقرأ منه الأردوينو أو التطبيق للتحديث
+app.get("/status", (req, res) => {
+  res.json({ status: currentStatus, confidence: currentConfidence });
+});
 
-// 🚀 start server
-app.listen(3000, "0.0.0.0", () => {
-  console.log("Server running on http://localhost:3000");
+getModel().then(() => {
+  app.listen(3000, "0.0.0.0", () => {
+    console.log("سيرفر تحليل كاميرا الآيباد يعمل على منفذ 3000");
+  });
 });
