@@ -28,7 +28,7 @@ async function loadModel() {
   }
 }
 
-// إعدادات التقاط الصور - تم تعديلها لإجبار الماك على اختيار OBS Virtual Camera
+// إعدادات التقاط الصور من OBS Virtual Camera
 const webcamOptions = {
   width: 640,
   height: 480,
@@ -36,7 +36,6 @@ const webcamOptions = {
   output: "jpeg",
   callbackReturn: "buffer",
   verbose: false,
-  // تحديد اسم الكاميرا الافتراضية لـ OBS في نظام الماك
   device: "OBS Virtual Camera" 
 };
 
@@ -47,30 +46,24 @@ function startCameraAnalysis() {
   setInterval(() => {
     webcam.capture("frame_cache", async (err, buffer) => {
       if (err) {
-        console.log("⚠️ تعذر القراءة من OBS. تأكدي من الضغط على Start Virtual Camera في برنامج OBS:", err.message);
+        console.log("⚠️ تعذر القراءة من OBS. تأكدي من إعطاء صلاحية الكاميرا للـ Terminal في إعدادات الماك:", err.message);
         return;
       }
 
       if (!model) return;
 
       try {
-        // تحويل الـ buffer إلى صورة يفهمها TensorFlow
         const tfImage = tf.node.decodeImage(buffer, 3);
-        
-        // إجراء التنبؤ عبر الموديل
         const predictions = await model.predict(tfImage);
         
-        // ترتيب النتائج للحصول على أعلى نسبة يقين
         predictions.sort((a, b) => b.probability - a.probability);
         const topResult = predictions[0];
 
-        // تحديث الحالة التي يقرأها التطبيق فوراً
         currentStatus = {
-          status: topResult.className, // الاسم المكتوب في موقع Teachable Machine (مثل Drowning أو Safe)
+          status: topResult.className, 
           confidence: Math.round(topResult.probability * 100)
         };
 
-        // تنظيف الذاكرة
         tfImage.dispose();
 
       } catch (aiErr) {
@@ -80,12 +73,10 @@ function startCameraAnalysis() {
   }, 1000); 
 }
 
-// الرابط الذي يطلبه تطبيق بلوفيبل لتحديث البيانات
 app.get("/status", (req, res) => {
   res.json(currentStatus);
 });
 
-// تشغيل السيرفر
 app.listen(3000, "0.0.0.0", () => {
   console.log("🚀 السيرفر يعمل الآن ومستعد على المنفذ 3000");
   loadModel();
