@@ -37,7 +37,7 @@ const webcamOptions = {
   callbackReturn: "buffer",
   verbose: false,
   // تحديد اسم الكاميرا الافتراضية لـ OBS في نظام الماك
-  device: "2" 
+  device: "OBS Virtual Camera" 
 };
 
 const webcam = NodeWebcam.create(webcamOptions);
