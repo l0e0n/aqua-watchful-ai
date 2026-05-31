@@ -982,36 +982,46 @@ function LiveScreen({
   const [aiConfidence, setAiConfidence] = useState<number>(0);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  // 🧠 AI فقط من السيرفر (بدون capture نهائيًا)
+  const [ready, setReady] = useState(false);
+
+  // ⏳ تأخير تشغيل AI إلى أن الصفحة تستقر
   useEffect(() => {
-  const interval = setInterval(async () => {
-    try {
-      const res = await fetch(
-        "https://sneezing-folk-cosponsor.ngrok-free.dev/status"
-      );
+    const timer = setTimeout(() => {
+      setReady(true);
+    }, 5000); // 5 ثواني انتظار حتى يشتغل iframe
 
-      if (!res.ok) {
-        setAiError("Server error");
-        return;
+    return () => clearTimeout(timer);
+  }, []);
+
+  // 🧠 AI polling (يبدأ بعد الجاهزية فقط)
+  useEffect(() => {
+    if (!ready) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(
+          "https://sneezing-folk-cosponsor.ngrok-free.dev/status"
+        );
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        setAiStatus(data.status);
+        setAiConfidence(data.confidence ?? 0);
+
+        setAiError(null);
+
+        if (data.status?.toLowerCase() === "danger") {
+          onDangerDetected(data.confidence);
+        }
+      } catch (err) {
+        console.log("temporary error ignored");
       }
+    }, 1500);
 
-      const data = await res.json();
-
-      setAiStatus(data.status);
-      setAiConfidence(data.confidence);
-
-      setAiError(null); // 🔥 الحل الحقيقي هنا
-
-      if (data.status?.toLowerCase() === "danger") {
-        onDangerDetected(data.confidence);
-      }
-    } catch (err) {
-      setAiError("AI feed offline");
-    }
-  }, 1500);
-
-  return () => clearInterval(interval);
-}, [onDangerDetected]);
+    return () => clearInterval(interval);
+  }, [ready, onDangerDetected]);
 
   const isDanger = aiStatus.toLowerCase() === "danger";
 
@@ -1024,7 +1034,7 @@ function LiveScreen({
   return (
     <div className="space-y-4 px-5">
       
-      {/* 🎥 LIVE VIEW (بدون تغيير تصميمك) */}
+      {/* 🎥 LIVE STREAM */}
       <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
         <div className="aspect-[3/4] w-full bg-black">
           <iframe
@@ -1051,7 +1061,7 @@ function LiveScreen({
         <div>Status: {aiStatus}</div>
         <div>Confidence: {aiConfidence}%</div>
 
-        {aiError && (
+        {aiError && ready && (
           <div className="text-red-500 text-xs mt-2">
             {aiError}
           </div>
@@ -1060,6 +1070,8 @@ function LiveScreen({
     </div>
   );
 }
+
+export default LiveScreen;
 /* ---------- Alerts (detailed incidents log) ---------- */
 
 function AlertsScreen({ t, incidents, lang }: { t: T; incidents: Incident[]; lang: Lang }) {
