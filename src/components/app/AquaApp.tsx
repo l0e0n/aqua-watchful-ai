@@ -970,67 +970,146 @@ function AiRow({ icon: Icon, label, value, tone }: { icon: any; label: string; v
 /* ---------- Live ---------- */
 
 interface LiveScreenProps {
-  t: { mainPool: string; instantAnalysis: string };
+  t: {
+    mainPool: string;
+    instantAnalysis: string;
+  };
   riskCritical: boolean;
   onDangerDetected?: (confidence: number) => void;
 }
 
 function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
-  const [aiStatus, setAiStatus] = useState("Connecting to iPad Camera...");
+  const [aiStatus, setAiStatus] = useState("Connecting to AI Server...");
   const [aiConfidence, setAiConfidence] = useState(0);
   const [aiError, setAiError] = useState<string | null>(null);
   
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  // رابط البث المباشر المكون من البكسلات الخام القادم من الآيباد عبر VDO.Ninja
+  // ملاحظة: تم استخدام رمز البث الخاص بك FAiZgaS
+  const streamURL = "https://vdo.ninja/player.html?view=FAiZgaS&autoplay=1&mute=1&cleanoutput=1";
+
   useEffect(() => {
-    // جلب البث المباشر من الآيباد وتحويله إلى عنصر الفيديو برمجياً
-    // ملاحظة: VDO.Ninja يتيح تحويل البث إلى ريموت ستريم عبر تحويل اللاعب لرابط ميديا خالص
-    if (videoRef.current) {
-      // نستخدم رابط التشغيل التلقائي والمباشر للبكسلات
-      videoRef.current.src = "https://vdo.ninja/player.html?view=FAiZgaS&autoplay=1&mute=1&cleanoutput=1";
-      
-      // هنا المشكلة الأمنية في المتصفح: إذا الرابط من موقع خارجي يرفض تقطيع الفريمات
-      // الحل الحقيقي لتغذية السيرفر بكاميرا الآيباد هو فتح هذا الرابط في متصفح الآيباد نفسه: http://192.168.8.101:3000/
-    }
-
-    // دالة طلب الحالة من السيرفر كل ثانية
+    // دالة جلب الحالة وإرسال الفريمات للسيرفر المحلي
     const interval = setInterval(async () => {
-      try {
-        const res = await fetch("http://192.168.8.101:3000/status");
-        const data = await res.json();
+      if (videoRef.current && videoRef.current.readyState === 4) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 224;
+        canvas.height = 224;
+        const ctx = canvas.getContext("2d");
         
-        setAiStatus(data.status);
-        setAiConfidence(data.confidence);
-        setAiError(null);
+        try {
+          // لقط الصورة من بث الآيباد المعروض
+          ctx?.drawImage(videoRef.current, 0, 0, 224, 224);
+          
+          canvas.toBlob(async (blob) => {
+            if (!blob) return;
+            
+            // 1. إرسال الصورة للسيرفر للتحليل
+            await fetch("http://192.168.8.101:3000/analyze-frame", {
+              method: "POST",
+              headers: { "Content-Type": "image/jpeg" },
+              body: blob
+            });
 
-        if (data.status.toLowerCase().includes("danger") && data.confidence > 80) {
-          onDangerDetected?.(data.confidence);
+            // 2. جلب النتيجة المحدثة فوراً من السيرفر
+            const res = await fetch("http://192.168.8.101:3000/status");
+            const data = await res.json();
+            
+            setAiStatus(data.status);
+            setAiConfidence(data.confidence);
+            setAiError(null);
+
+            // إذا تطلب الأمر تفعيل الإنذار والمنصة
+            if (data.status.toLowerCase().includes("danger") && data.confidence > 80) {
+              onDangerDetected?.(data.confidence);
+            }
+          }, "image/jpeg", 0.6);
+
+        } catch (err) {
+          // في حال رفض المتصفح تقطيع بكسلات الرابط الخارجي أمنياً
+          setAiError("Security restriction on external stream. Check local server status.");
         }
-      } catch (err) {
-        setAiError("السيرفر لا يستجيب، تأكد من تشغيله");
+      } else {
+        // إذا لم يبدأ الفيديو بالعمل بعد، نكتفي بجلب آخر حالة مسجلة في السيرفر
+        try {
+          const res = await fetch("http://192.168.8.101:3000/status");
+          const data = await res.json();
+          setAiStatus(data.status);
+          setAiConfidence(data.confidence);
+        } catch (e) {
+          setAiError("Waiting for local AI Server...");
+        }
       }
     }, 1000);
 
     return () => clearInterval(interval);
   }, [onDangerDetected]);
 
-  const isDanger = riskCritical || aiStatus.toLowerCase().includes("danger");
+  const statusKey = aiStatus.toLowerCase();
+  const isDanger = riskCritical || statusKey.includes("danger") || statusKey.includes("drowning");
+  const statusTone = isDanger ? "text-danger" : statusKey.includes("swimming") || statusKey.includes("safe") ? "text-aqua" : "text-foreground";
 
   return (
-    <div className="space-y-4 px-5 text-white">
-      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black aspect-[3/4]">
-        {/* عرض بث الآيباد */}
-        <iframe
-          src="https://vdo.ninja/?view=FAiZgaS&autoplay=1&mute=1&cleanoutput=1"
-          className="h-full w-full border-0"
-          allow="autoplay; camera; microphone"
-        />
-        <div className="absolute inset-x-3 bottom-3 rounded-xl bg-black/60 px-3 py-2 text-xs">
-          {t.mainPool} : <span className={isDanger ? "text-red-500 font-bold" : "text-green-400"}>{aiStatus} ({aiConfidence}%)</span>
+    <div className="space-y-4 px-5">
+      {/* عرض البث الحي القادم من الآيباد بالديزاين الخاص بك */}
+      <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
+        <div className="aspect-[3/4] w-full bg-deep">
+          {/* تم استبدال الـ iframe بعنصر video يدعم القراءة البرمجية للبث */}
+          <video
+            ref={videoRef}
+            src={streamURL}
+            className="h-full w-full object-cover"
+            autoPlay
+            playsInline
+            muted
+            controls={false}
+            crossOrigin="anonymous"
+          />
+        </div>
+        <div className="pointer-events-none absolute end-3 top-3 flex items-center gap-1.5 rounded-full bg-danger/90 px-2.5 py-1 text-[10px] font-bold text-destructive-foreground">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
+        </div>
+        <div className="pointer-events-none absolute start-3 top-3 rounded-full bg-background/60 px-2.5 py-1 text-[10px] backdrop-blur">
+          iPad · Remote
+        </div>
+        <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between rounded-2xl bg-background/70 px-3 py-2.5 backdrop-blur">
+          <div className="text-[11px]">
+            <div className="font-semibold">{t.mainPool}</div>
+            <div className={`font-bold ${statusTone}`}>
+              {aiStatus} · {aiConfidence}%
+            </div>
+          </div>
         </div>
       </div>
-      
-      {aiError && <div className="text-xs text-red-400 bg-red-500/10 p-2 rounded-xl text-center">{aiError}</div>}
+
+      {/* لوحة التحليل الفوري السفلي من تصميمك الأصلي */}
+      <div className="rounded-2xl border border-border/60 bg-card-gradient p-4">
+        <div className="text-xs font-bold">{t.instantAnalysis}</div>
+        <div className="mt-3 space-y-2.5">
+          <div className="flex items-center justify-between rounded-xl bg-background/40 px-3 py-2">
+            <span className="text-xs text-muted-foreground">Status</span>
+            <span className={`text-xs font-semibold ${statusTone}`}>{aiStatus}</span>
+          </div>
+          <div className="rounded-xl bg-background/40 px-3 py-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Confidence</span>
+              <span className="text-xs font-semibold">{aiConfidence}%</span>
+            </div>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border/60">
+              <div
+                className={`h-full transition-all duration-500 ${isDanger ? "bg-danger" : "bg-aqua-gradient"}`}
+                style={{ width: `${aiConfidence}%` }}
+              />
+            </div>
+          </div>
+          {aiError && (
+            <div className="rounded-xl bg-danger/10 px-3 py-2 text-[10px] text-danger text-center leading-relaxed">
+              {aiError}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
