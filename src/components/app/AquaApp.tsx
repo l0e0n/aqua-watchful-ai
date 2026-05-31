@@ -984,32 +984,34 @@ function LiveScreen({
 
   // 🧠 AI فقط من السيرفر (بدون capture نهائيًا)
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(
-          "https://sneezing-folk-cosponsor.ngrok-free.dev/status"
-        );
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(
+        "https://sneezing-folk-cosponsor.ngrok-free.dev/status"
+      );
 
-        if (!res.ok) {
-          setAiError("Server error");
-          return;
-        }
-
-        const data = await res.json();
-
-        setAiStatus(data.status);
-        setAiConfidence(data.confidence);
-
-        if (data.status?.toLowerCase() === "danger") {
-          onDangerDetected(data.confidence);
-        }
-      } catch (err) {
-        setAiError("AI feed offline");
+      if (!res.ok) {
+        setAiError("Server error");
+        return;
       }
-    }, 1500);
 
-    return () => clearInterval(interval);
-  }, [onDangerDetected]);
+      const data = await res.json();
+
+      setAiStatus(data.status);
+      setAiConfidence(data.confidence);
+
+      setAiError(null); // 🔥 الحل الحقيقي هنا
+
+      if (data.status?.toLowerCase() === "danger") {
+        onDangerDetected(data.confidence);
+      }
+    } catch (err) {
+      setAiError("AI feed offline");
+    }
+  }, 1500);
+
+  return () => clearInterval(interval);
+}, [onDangerDetected]);
 
   const isDanger = aiStatus.toLowerCase() === "danger";
 
