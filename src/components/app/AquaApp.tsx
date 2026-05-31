@@ -969,6 +969,7 @@ function AiRow({ icon: Icon, label, value, tone }: { icon: any; label: string; v
 
 /* ---------- Live ---------- */
 
+
 interface LiveScreenProps {
   t: {
     mainPool: string;
@@ -982,64 +983,28 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
   const [aiStatus, setAiStatus] = useState("Connecting to AI Server...");
   const [aiConfidence, setAiConfidence] = useState(0);
   const [aiError, setAiError] = useState<string | null>(null);
-  
-  const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // رابط البث المباشر المكون من البكسلات الخام القادم من الآيباد عبر VDO.Ninja
-  // ملاحظة: تم استخدام رمز البث الخاص بك FAiZgaS
-  const streamURL = "https://vdo.ninja/player.html?view=FAiZgaS&autoplay=1&mute=1&cleanoutput=1";
+  // الرابط الأصلي والمستقر لعرض البث الحي للآيباد
+  const streamURL = "https://vdo.ninja/?view=FAiZgaS&autoplay=1&mute=1&cleanoutput=1";
 
   useEffect(() => {
-    // دالة جلب الحالة وإرسال الفريمات للسيرفر المحلي
+    // جلب التحديثات دورياً من السيرفر المحلي المتصل بالكاميرا
     const interval = setInterval(async () => {
-      if (videoRef.current && videoRef.current.readyState === 4) {
-        const canvas = document.createElement("canvas");
-        canvas.width = 224;
-        canvas.height = 224;
-        const ctx = canvas.getContext("2d");
+      try {
+        const res = await fetch("http://192.168.8.101:3000/status");
+        if (!res.ok) throw new Error("Server temporary unavailable");
         
-        try {
-          // لقط الصورة من بث الآيباد المعروض
-          ctx?.drawImage(videoRef.current, 0, 0, 224, 224);
-          
-          canvas.toBlob(async (blob) => {
-            if (!blob) return;
-            
-            // 1. إرسال الصورة للسيرفر للتحليل
-            await fetch("http://192.168.8.101:3000/analyze-frame", {
-              method: "POST",
-              headers: { "Content-Type": "image/jpeg" },
-              body: blob
-            });
+        const data = await res.json();
+        setAiStatus(data.status);
+        setAiConfidence(data.confidence);
+        setAiError(null);
 
-            // 2. جلب النتيجة المحدثة فوراً من السيرفر
-            const res = await fetch("http://192.168.8.101:3000/status");
-            const data = await res.json();
-            
-            setAiStatus(data.status);
-            setAiConfidence(data.confidence);
-            setAiError(null);
-
-            // إذا تطلب الأمر تفعيل الإنذار والمنصة
-            if (data.status.toLowerCase().includes("danger") && data.confidence > 80) {
-              onDangerDetected?.(data.confidence);
-            }
-          }, "image/jpeg", 0.6);
-
-        } catch (err) {
-          // في حال رفض المتصفح تقطيع بكسلات الرابط الخارجي أمنياً
-          setAiError("Security restriction on external stream. Check local server status.");
+        // تفعيل استجابة الطوارئ إذا رصدت القراءات حالة خطر
+        if (data.status.toLowerCase().includes("danger") && data.confidence > 80) {
+          onDangerDetected?.(data.confidence);
         }
-      } else {
-        // إذا لم يبدأ الفيديو بالعمل بعد، نكتفي بجلب آخر حالة مسجلة في السيرفر
-        try {
-          const res = await fetch("http://192.168.8.101:3000/status");
-          const data = await res.json();
-          setAiStatus(data.status);
-          setAiConfidence(data.confidence);
-        } catch (e) {
-          setAiError("Waiting for local AI Server...");
-        }
+      } catch (err) {
+        setAiError("Waiting for updates from local AI server...");
       }
     }, 1000);
 
@@ -1052,26 +1017,21 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
 
   return (
     <div className="space-y-4 px-5">
-      {/* عرض البث الحي القادم من الآيباد بالديزاين الخاص بك */}
+      {/* إطار عرض البث المباشر المعتمد - التصميم الأصلي */}
       <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
         <div className="aspect-[3/4] w-full bg-deep">
-          {/* تم استبدال الـ iframe بعنصر video يدعم القراءة البرمجية للبث */}
-          <video
-            ref={videoRef}
+          <iframe
             src={streamURL}
-            className="h-full w-full object-cover"
-            autoPlay
-            playsInline
-            muted
-            controls={false}
-            crossOrigin="anonymous"
+            title="iPad Live View"
+            allow="autoplay; camera; fullscreen"
+            className="h-full w-full border-0"
           />
         </div>
         <div className="pointer-events-none absolute end-3 top-3 flex items-center gap-1.5 rounded-full bg-danger/90 px-2.5 py-1 text-[10px] font-bold text-destructive-foreground">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
         </div>
         <div className="pointer-events-none absolute start-3 top-3 rounded-full bg-background/60 px-2.5 py-1 text-[10px] backdrop-blur">
-          iPad · Remote
+          iPad · HD
         </div>
         <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between rounded-2xl bg-background/70 px-3 py-2.5 backdrop-blur">
           <div className="text-[11px]">
@@ -1083,7 +1043,7 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
         </div>
       </div>
 
-      {/* لوحة التحليل الفوري السفلي من تصميمك الأصلي */}
+      {/* لوحة التحليل الإحصائي الفوري */}
       <div className="rounded-2xl border border-border/60 bg-card-gradient p-4">
         <div className="text-xs font-bold">{t.instantAnalysis}</div>
         <div className="mt-3 space-y-2.5">
