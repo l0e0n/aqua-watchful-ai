@@ -979,19 +979,21 @@ interface LiveScreenProps {
 }
 
 function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
+  // الحفاظ على حالات التصميم الأصلية
   const [aiStatus, setAiStatus] = useState("Connecting to AI Server...");
   const [aiConfidence, setAiConfidence] = useState(0);
   const [aiError, setAiError] = useState<string | null>(null);
   
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // البث الأصلي الخاص بك شغال تمام عبر الـ iframe
-  const streamURL = "https://vdo.ninja/?view=FAiZgaS&autoplay=1&mute=1&cleanoutput=1";
+  // رابط البث الحي الخاص بالايباد (نفس الرابط الأصلي حقك)
+  const streamURL = "https://vdo.ninja/player.html?view=FAiZgaS&autoplay=1&mute=1&cleanoutput=1";
 
   useEffect(() => {
-    // دالة لجلب القراءات المحدثة من السيرفر كل ثانية
+    // دالة جلب البيانات من السيرفر المحلي كل ثانية
     const interval = setInterval(async () => {
       try {
+        // الاتصال بالسيرفر لقراءة الحالة الحالية للذكاء الاصطناعي
         const res = await fetch("http://192.168.8.101:3000/status");
         if (!res.ok) throw new Error();
         const data = await res.json();
@@ -1000,39 +1002,28 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
         setAiConfidence(data.confidence);
         setAiError(null);
 
-        if (data.status.toLowerCase().includes("danger") && data.confidence > 80) {
+        // إذا اكتشف الموديل حالة غرق أو خطر ونسبة اليقين أعلى من 80%، يتم تشغيل الإنذار ورفع الأرضية
+        const statusLower = data.status.toLowerCase();
+        if ((statusLower.includes("danger") || statusLower.includes("drowning") || statusLower.includes("غرق")) && data.confidence > 80) {
           onDangerDetected?.(data.confidence);
         }
       } catch (err) {
         setAiError("Waiting for local AI server...");
+        setAiStatus("Connecting...");
       }
     }, 1000);
 
-    // 👈 السكربت الخفي لتغذية السيرفر بالفريمات من المتصفح مباشرة
-    // بما أن الـ iframe الخارجي قد يمنع لقط الصور مباشرة أمنياً، نرسل إشارة دورية للسيرفر 
-    // ليقوم بتحديث حالته الافتراضية إذا واجهت المتصفحات قيود CORS
-    const backupInterval = setInterval(async () => {
-      try {
-        // نرسل طلب تنشيط للسيرفر ليتحرك من حالة الـ Connecting
-        await fetch("http://192.168.8.101:3000/ping", { method: "POST" });
-      } catch (e) {
-        console.log("Server not responding to ping");
-      }
-    }, 2000);
-
-    return () => {
-      clearInterval(interval);
-      clearInterval(backupInterval);
-    };
+    return () => clearInterval(interval);
   }, [onDangerDetected]);
 
+  // منطق الألوان الأصلي الخاص بتصميمك دون أي تغيير
   const statusKey = aiStatus.toLowerCase();
-  const isDanger = riskCritical || statusKey.includes("danger") || statusKey.includes("drowning");
+  const isDanger = riskCritical || statusKey.includes("danger") || statusKey.includes("drowning") || statusKey.includes("غرق");
   const statusTone = isDanger ? "text-danger" : statusKey.includes("swimming") || statusKey.includes("safe") ? "text-aqua" : "text-foreground";
 
   return (
     <div className="space-y-4 px-5">
-      {/* كرت البث الحي - الديزاين الأصلي حقك كاملاً */}
+      {/* كرت البث الحي - الديزاين الأصلي حقك كاملاً وبنفس الألوان */}
       <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
         <div className="aspect-[3/4] w-full bg-deep">
           <iframe
@@ -1059,7 +1050,7 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
         </div>
       </div>
 
-      {/* لوحة التحليل الفوري السفلي من تصميمك الأصلي */}
+      {/* لوحة التحليل الفوري السفلي - الديزاين الأصلي حقك كاملاً */}
       <div className="rounded-2xl border border-border/60 bg-card-gradient p-4">
         <div className="text-xs font-bold">{t.instantAnalysis}</div>
         <div className="mt-3 space-y-2.5">
