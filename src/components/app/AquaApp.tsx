@@ -973,7 +973,7 @@ function LiveScreen({
   riskCritical,
   onDangerDetected,
 }: {
-  t: T;
+  t: any;
   riskCritical: boolean;
   onDangerDetected: (confidence?: number) => void;
 }) {
@@ -981,60 +981,66 @@ function LiveScreen({
   const [aiConfidence, setAiConfidence] = useState<number>(0);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  const lastDangerRef = useRef<number>(0);
-  const lastStatusRef = useRef<string>("—");
-  const lastChangeTimeRef = useRef<number>(Date.now());
-  const videoRef = useRef<HTMLIFrameElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  // 🎥 تشغيل بث VDO.Ninja داخل video
   useEffect(() => {
-  const interval = setInterval(async () => {
-    try {
-      const iframe = document.querySelector("iframe") as HTMLIFrameElement;
+    const video = videoRef.current;
+    if (!video) return;
 
-      if (!iframe) return;
+    video.src = "https://vdo.ninja/?view=FAiZgaS&cleanoutput&autostart";
+    video.play().catch(() => {});
+  }, []);
 
-      // نحاول نلقط صورة من الفيديو (VDO.Ninja يسمح غالباً عبر stream داخلي)
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
+  // 🧠 AI Loop
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const video = videoRef.current;
+        if (!video) return;
 
-      canvas.width = 640;
-      canvas.height = 480;
+        if (video.readyState < 2) return;
 
-      const video = iframe.contentWindow?.document?.querySelector("video") as HTMLVideoElement;
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
 
-      if (!video || !ctx) return;
+        canvas.width = 640;
+        canvas.height = 480;
 
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        if (!ctx) return;
 
-      canvas.toBlob(async (blob) => {
-        if (!blob) return;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        const formData = new FormData();
-        formData.append("image", blob, "frame.jpg");
+        canvas.toBlob(async (blob) => {
+          if (!blob) return;
 
-        const res = await fetch("https://sneezing-folk-cosponsor.ngrok-free.dev/analyze", {
-          method: "POST",
-          body: formData,
-        });
+          const formData = new FormData();
+          formData.append("image", blob, "frame.jpg");
 
-        const data = await res.json();
+          const res = await fetch(
+            "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze",
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
 
-        setAiStatus(data.status);
-        setAiConfidence(data.confidence);
+          const data = await res.json();
 
-        if (data.status?.toLowerCase() === "danger") {
-          onDangerDetected(data.confidence);
-        }
-      }, "image/jpeg");
+          setAiStatus(data.status);
+          setAiConfidence(data.confidence);
 
-    } catch (err) {
-      setAiError("camera capture failed");
-    }
-  }, 1000);
+          if (data.status?.toLowerCase() === "danger") {
+            onDangerDetected(data.confidence);
+          }
+        }, "image/jpeg");
+      } catch (err) {
+        setAiError("AI feed offline");
+      }
+    }, 1000);
 
-  return () => clearInterval(interval);
-}, []);
-  [onDangerDetected];
+    return () => clearInterval(interval);
+  }, [onDangerDetected]);
 
   const statusKey = aiStatus.toLowerCase();
   const isDanger = statusKey === "danger";
@@ -1049,91 +1055,47 @@ function LiveScreen({
   return (
     <div className="space-y-4 px-5">
       <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
-        <div className="aspect-[3/4] w-full bg-deep">
-          <iframe
-            src="https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1"
-            title="iPad live camera"
-            allow="autoplay; camera; microphone; fullscreen"
-            allowFullScreen
-            className="h-full w-full border-0"
+        <div className="aspect-[3/4] w-full bg-black">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="h-full w-full object-cover"
           />
         </div>
 
-        <div className="pointer-events-none absolute end-3 top-3 flex items-center gap-1.5 rounded-full bg-danger/90 px-2.5 py-1 text-[10px] font-bold text-destructive-foreground">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />{" "}
+        <div className="pointer-events-none absolute end-3 top-3 rounded-full bg-red-600 px-2 py-1 text-[10px] text-white">
           LIVE
         </div>
 
-        <div className="pointer-events-none absolute start-3 top-3 rounded-full bg-background/60 px-2.5 py-1 text-[10px] backdrop-blur">
-          iPad · HD
+        <div className="pointer-events-none absolute start-3 top-3 rounded-full bg-black/50 px-2 py-1 text-[10px] text-white">
+          iPad Camera
         </div>
 
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between rounded-2xl bg-background/70 px-3 py-2.5 backdrop-blur">
-          <div className="text-[11px]">
-            <div className="font-semibold">{t.mainPool}</div>
-            <div className={`font-bold ${statusTone}`}>
+        <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between rounded-xl bg-black/60 px-3 py-2 text-white">
+          <div>
+            <div className="text-xs font-bold">{t?.mainPool}</div>
+            <div className="text-xs">
               {aiStatus} · {aiConfidence}%
             </div>
           </div>
 
-          <div
-            className={`grid h-9 w-9 place-items-center rounded-full ${
-              isDanger ? "bg-danger/80" : "bg-aqua-gradient"
-            }`}
-          >
-            {isDanger ? (
-              <Zap className="h-4 w-4 text-destructive-foreground" />
-            ) : (
-              <Activity className="h-4 w-4 text-primary-foreground" />
-            )}
+          <div className="text-xs">
+            {riskCritical || isDanger ? "CRITICAL" : "SAFE"}
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border/60 bg-card-gradient p-4">
-        <div className="text-xs font-bold">{t.instantAnalysis}</div>
+      <div className="rounded-xl border p-3 text-sm">
+        <div className="font-bold">AI Status</div>
 
-        <div className="mt-3 space-y-2.5">
-          <div className="flex items-center justify-between rounded-xl bg-background/40 px-3 py-2">
-            <span className="text-xs text-muted-foreground">Status</span>
-            <span className={`text-xs font-semibold ${statusTone}`}>
-              {aiStatus}
-            </span>
-          </div>
+        <div>Status: {aiStatus}</div>
+        <div>Confidence: {aiConfidence}%</div>
 
-          <div className="rounded-xl bg-background/40 px-3 py-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                Confidence
-              </span>
-              <span className="text-xs font-semibold">
-                {aiConfidence}%
-              </span>
-            </div>
-
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border/60">
-              <div
-                className={`h-full ${
-                  isDanger ? "bg-danger" : "bg-aqua-gradient"
-                }`}
-                style={{ width: `${aiConfidence}%` }}
-              />
-            </div>
-          </div>
-
-          <AiRow
-            icon={Activity}
-            label={t.riskLevel}
-            value={riskCritical || isDanger ? t.critical : t.low}
-            tone={riskCritical || isDanger ? "danger" : "default"}
-          />
-
-          {aiError && (
-            <div className="rounded-xl bg-danger/10 px-3 py-2 text-[10px] text-danger">
-              AI feed offline ({aiError})
-            </div>
-          )}
-        </div>
+        {aiError && (
+          <div className="text-red-500 text-xs mt-2">{aiError}</div>
+        )}
       </div>
     </div>
   );
