@@ -1,26 +1,22 @@
 const express = require("express");
 const cors = require("cors");
-const multer = require("multer");
-const path = require("path");
 const tf = require("@tensorflow/tfjs-node");
 const tmImage = require("@teachablemachine/image");
+const ffmpeg = require("fluent-ffmpeg");
+const ffmpegPath = require("ffmpeg-static");
+const fs = require("fs");
 
 const app = express();
 app.use(cors());
 
-// استقبال الصور
-const upload = multer({ storage: multer.memoryStorage() });
+ffmpeg.setFfmpegPath(ffmpegPath);
 
-// موديل Teachable Machine المحلي
-const MODEL_URL =
-  "file://" + path.join(__dirname, "public/model/model.json");
+// 🧠 موديل AI
+const MODEL_URL = "file://public/model/model.json";
+const METADATA_URL = "file://public/model/metadata.json";
 
-const METADATA_URL =
-  "file://" + path.join(__dirname, "public/model/metadata.json");
+let model;
 
-let model = null;
-
-// تحميل الموديل مرة واحدة
 async function loadModel() {
   if (!model) {
     console.log("⏳ Loading AI model...");
@@ -30,46 +26,56 @@ async function loadModel() {
   return model;
 }
 
-// اختبار السيرفر
-app.get("/", (req, res) => {
-  res.json({ status: "server running" });
-});
+// 🎥 هنا رابط البث من VDO.Ninja
+const STREAM_URL =
+  "https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1";
 
-// 🔥 أهم endpoint: تحليل صورة من البث
-app.post("/analyze", upload.single("image"), async (req, res) => {
+// 📸 نسحب صورة من الفيديو
+function captureFrame() {
+  return new Promise((resolve, reject) => {
+    const output = "./frame.jpg";
+
+    ffmpeg(STREAM_URL)
+      .frames(1)
+      .output(output)
+      .on("end", () => resolve(output))
+      .on("error", reject)
+      .run();
+  });
+}
+
+// 🧠 تحليل مباشر
+app.get("/analyze-stream", async (req, res) => {
   try {
     const model = await loadModel();
 
-    if (!req.file) {
-      return res.status(400).json({ error: "No image received" });
-    }
+    const imagePath = await captureFrame();
 
-    // تحويل الصورة إلى Tensor
-    const imageTensor = tf.node.decodeImage(req.file.buffer, 3);
+    const imageBuffer = fs.readFileSync(imagePath);
+    const tensor = tf.node.decodeImage(imageBuffer);
 
-    // تشغيل AI
-    const prediction = await model.predict(imageTensor);
+    const prediction = await model.predict(tensor);
 
-    // تنظيف الذاكرة
-    imageTensor.dispose();
+    tensor.dispose();
 
-    // ترتيب النتائج
     prediction.sort((a, b) => b.probability - a.probability);
     const top = prediction[0];
 
-    // رجوع النتيجة للواجهة
     res.json({
       status: top.className,
       confidence: Math.round(top.probability * 100),
     });
-
   } catch (err) {
-    console.error("❌ AI Error:", err);
+    console.error("❌ ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// تشغيل السيرفر
+// 🔥 اختبار السيرفر
+app.get("/", (req, res) => {
+  res.json({ status: "server running" });
+});
+
 app.listen(3000, "0.0.0.0", () => {
   console.log("🚀 Server running on http://localhost:3000");
 });

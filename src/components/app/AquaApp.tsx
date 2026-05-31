@@ -994,53 +994,27 @@ function LiveScreen({
 
   // 🧠 AI Loop
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const video = videoRef.current;
-        if (!video) return;
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(
+        "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze-stream"
+      );
 
-        if (video.readyState < 2) return;
+      const data = await res.json();
 
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
+      setAiStatus(data.status);
+      setAiConfidence(data.confidence);
 
-        canvas.width = 640;
-        canvas.height = 480;
-
-        if (!ctx) return;
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        canvas.toBlob(async (blob) => {
-          if (!blob) return;
-
-          const formData = new FormData();
-          formData.append("image", blob, "frame.jpg");
-
-          const res = await fetch(
-            "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze",
-            {
-              method: "POST",
-              body: formData,
-            }
-          );
-
-          const data = await res.json();
-
-          setAiStatus(data.status);
-          setAiConfidence(data.confidence);
-
-          if (data.status?.toLowerCase() === "danger") {
-            onDangerDetected(data.confidence);
-          }
-        }, "image/jpeg");
-      } catch (err) {
-        setAiError("AI feed offline");
+      if (data.status?.toLowerCase() === "danger") {
+        onDangerDetected(data.confidence);
       }
-    }, 1000);
+    } catch (err) {
+      setAiError("AI feed offline");
+    }
+  }, 1500);
 
-    return () => clearInterval(interval);
-  }, [onDangerDetected]);
+  return () => clearInterval(interval);
+}, [onDangerDetected]);
 
   const statusKey = aiStatus.toLowerCase();
   const isDanger = statusKey === "danger";
