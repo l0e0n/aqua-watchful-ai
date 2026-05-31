@@ -976,69 +976,49 @@ function LiveScreen({ t, onDangerDetected }: any) {
 
   useEffect(() => {
     const interval = setInterval(async () => {
-  try {
-    const iframe = document.querySelector("iframe") as HTMLIFrameElement;
-    if (!iframe) return;
+      try {
+        const res = await fetch(
+          "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze",
+          {
+            method: "POST",
+          }
+        );
 
-    const video =
-      iframe.contentWindow?.document?.querySelector("video") as HTMLVideoElement;
+        if (!res.ok) return;
 
-    if (!video) return;
+        const data = await res.json();
 
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+        setAiStatus(data.status);
+        setAiConfidence(data.confidence);
+        setAiError(null);
 
-    canvas.width = 640;
-    canvas.height = 480;
-
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-
-      const formData = new FormData();
-      formData.append("image", blob, "frame.jpg");
-
-      const res = await fetch(
-        "https://YOUR-NGROK-URL/analyze",
-        {
-          method: "POST",   // 🔴 هذا أهم سطر
-          body: formData,
+        if (data.status?.toLowerCase() === "danger") {
+          onDangerDetected?.(data.confidence);
         }
-      );
 
-      const data = await res.json();
+      } catch (err) {
+        setAiError("AI feed offline");
+      }
+    }, 2000);
 
-      setAiStatus(data.status);
-      setAiConfidence(data.confidence);
-
-    }, "image/jpeg");
-
-  } catch (err) {
-    setAiError("AI feed offline");
-  }
-}, 1500);
     return () => clearInterval(interval);
   }, [onDangerDetected]);
 
   return (
-    <div className="space-y-4 px-5">
-
-      {/* 🎥 LIVE STREAM */}
+    <div>
+      {/* 🎥 فقط عرض */}
       <iframe
         src="https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1"
-        className="w-full h-[400px] rounded-xl"
-        allow="autoplay; camera; microphone"
+        className="w-full h-[400px]"
       />
 
-      {/* 🧠 AI RESULT */}
-      <div className="rounded-xl border p-3">
-        <div>AI Status: {aiStatus}</div>
-        <div>Confidence: {aiConfidence}%</div>
+      {/* 🧠 AI result */}
+      <div>
+        <h3>AI Status: {aiStatus}</h3>
+        <p>Confidence: {aiConfidence}%</p>
 
         {aiError && (
-          <div style={{ color: "red" }}>{aiError}</div>
+          <p style={{ color: "red" }}>{aiError}</p>
         )}
       </div>
     </div>
