@@ -8,12 +8,9 @@ const path = require("path");
 const app = express();
 app.use(cors());
 
-// 📦 تخزين الصورة في الذاكرة
 const upload = multer({ storage: multer.memoryStorage() });
 
-// 📁 مسار الموديل
-app.use("/model", express.static(path.join(__dirname, "public/model")));
-
+// 📁 الموديل المحلي
 const MODEL_URL =
   "file://" + path.join(__dirname, "public/model/model.json");
 
@@ -22,25 +19,22 @@ const METADATA_URL =
 
 let model = null;
 
-// 🧠 تحميل الموديل مرة واحدة فقط
+// 🧠 تحميل الموديل
 async function getModel() {
   if (!model) {
-    console.log("⏳ Loading AI model...");
+    console.log("Loading model...");
     model = await tmImage.load(MODEL_URL, METADATA_URL);
-    console.log("✅ Model loaded");
+    console.log("Model loaded");
   }
   return model;
 }
 
 // ❤️ اختبار السيرفر
-app.get("/status", (req, res) => {
-  res.json({
-    status: "swimming",
-    confidence: 87,
-  });
+app.get("/", (req, res) => {
+  res.json({ status: "server running" });
 });
 
-// 🧠 AI ANALYZE (هذا أهم جزء)
+// 🧠 AI ANALYZE (الأساسي)
 app.post("/analyze", upload.single("image"), async (req, res) => {
   try {
     const model = await getModel();
@@ -49,15 +43,14 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       return res.status(400).json({ error: "No image received" });
     }
 
-    // تحويل الصورة إلى Tensor
+    console.log("Image received size:", req.file.size);
+
     const imageTensor = tf.node.decodeImage(req.file.buffer, 3);
 
-    // prediction
     const prediction = await model.predict(imageTensor);
 
     imageTensor.dispose();
 
-    // ترتيب النتائج
     prediction.sort((a, b) => b.probability - a.probability);
 
     const top = prediction[0];
@@ -66,16 +59,14 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       status: top.className,
       confidence: Math.round(top.probability * 100),
     });
+
   } catch (err) {
-    console.error("❌ ERROR:", err.message);
-    res.status(500).json({
-      error: err.message,
-    });
+    console.error("ERROR:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
 // 🚀 تشغيل السيرفر
-const PORT = 3000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+app.listen(3000, "0.0.0.0", () => {
+  console.log("Server running on http://localhost:3000");
 });

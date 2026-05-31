@@ -969,102 +969,75 @@ function AiRow({ icon: Icon, label, value, tone }: { icon: any; label: string; v
 
 /* ---------- Live ---------- */
 
-function LiveScreen({
-  t,
-  riskCritical,
-  onDangerDetected,
-}: {
-  t: any;
-  riskCritical: boolean;
-  onDangerDetected: (confidence?: number) => void;
-}) {
-  const [aiStatus, setAiStatus] = useState<string>("—");
-  const [aiConfidence, setAiConfidence] = useState<number>(0);
+function LiveScreen({ t, onDangerDetected }: any) {
+  const [aiStatus, setAiStatus] = useState("—");
+  const [aiConfidence, setAiConfidence] = useState(0);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  const [ready, setReady] = useState(false);
-
-  // ⏳ تأخير تشغيل AI إلى أن الصفحة تستقر
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setReady(true);
-    }, 5000); // 5 ثواني انتظار حتى يشتغل iframe
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  // 🧠 AI polling (يبدأ بعد الجاهزية فقط)
-  useEffect(() => {
-    if (!ready) return;
-
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(
-          "https://sneezing-folk-cosponsor.ngrok-free.dev/status"
-        );
+        const iframe = document.querySelector("iframe") as HTMLIFrameElement;
+        if (!iframe) return;
 
-        if (!res.ok) return;
+        const video = iframe.contentWindow?.document?.querySelector("video") as HTMLVideoElement;
+        if (!video) return;
 
-        const data = await res.json();
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
 
-        setAiStatus(data.status);
-        setAiConfidence(data.confidence ?? 0);
+        canvas.width = 640;
+        canvas.height = 480;
 
-        setAiError(null);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        if (data.status?.toLowerCase() === "danger") {
-          onDangerDetected(data.confidence);
-        }
+        canvas.toBlob(async (blob) => {
+          if (!blob) return;
+
+          const formData = new FormData();
+          formData.append("image", blob, "frame.jpg");
+
+          const res = await fetch(
+            "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze",
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+
+          const data = await res.json();
+
+          setAiStatus(data.status);
+          setAiConfidence(data.confidence);
+          setAiError(null);
+
+          if (data.status?.toLowerCase() === "danger") {
+            onDangerDetected?.(data.confidence);
+          }
+        }, "image/jpeg");
+
       } catch (err) {
-        console.log("temporary error ignored");
+        setAiError("AI feed offline");
       }
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [ready, onDangerDetected]);
-
-  const isDanger = aiStatus.toLowerCase() === "danger";
-
-  const statusTone = isDanger
-    ? "text-danger"
-    : aiStatus.toLowerCase() === "swimming"
-    ? "text-aqua"
-    : "text-foreground";
+  }, [onDangerDetected]);
 
   return (
-    <div className="space-y-4 px-5">
-      
-      {/* 🎥 LIVE STREAM */}
-      <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
-        <div className="aspect-[3/4] w-full bg-black">
-          <iframe
-            src="https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1"
-            title="live camera"
-            allow="autoplay; camera; microphone; fullscreen"
-            className="h-full w-full border-0"
-          />
-        </div>
+    <div>
+      <iframe
+        src="https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1"
+        className="w-full h-[400px]"
+      />
 
-        <div className="absolute top-3 right-3 bg-red-600 text-white text-[10px] px-2 py-1 rounded-full">
-          LIVE
-        </div>
+      <div>
+        <h3>AI Status: {aiStatus}</h3>
+        <p>Confidence: {aiConfidence}%</p>
 
-        <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white p-2 rounded-xl text-xs">
-          {t?.mainPool} · {aiStatus} · {aiConfidence}%
-        </div>
-      </div>
-
-      {/* 🧠 AI PANEL */}
-      <div className="rounded-xl border p-3 text-sm">
-        <div className="font-bold">AI Status</div>
-
-        <div>Status: {aiStatus}</div>
-        <div>Confidence: {aiConfidence}%</div>
-
-        {aiError && ready && (
-          <div className="text-red-500 text-xs mt-2">
-            {aiError}
-          </div>
+        {aiError && (
+          <p style={{ color: "red" }}>{aiError}</p>
         )}
       </div>
     </div>
