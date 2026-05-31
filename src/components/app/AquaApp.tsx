@@ -976,63 +976,49 @@ function LiveScreen({ t, onDangerDetected }: any) {
 
   useEffect(() => {
     const interval = setInterval(async () => {
-      try {
-        // 🎥 نجيب الفيديو من iframe
-        const iframe = document.querySelector("iframe") as HTMLIFrameElement;
-        if (!iframe) return;
+  try {
+    const iframe = document.querySelector("iframe") as HTMLIFrameElement;
+    if (!iframe) return;
 
-        const video =
-          iframe.contentWindow?.document?.querySelector("video") as HTMLVideoElement;
+    const video =
+      iframe.contentWindow?.document?.querySelector("video") as HTMLVideoElement;
 
-        if (!video) return;
+    if (!video) return;
 
-        // 🧠 نحول الفيديو لصورة
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-        if (!ctx) return;
+    canvas.width = 640;
+    canvas.height = 480;
 
-        canvas.width = 640;
-        canvas.height = 480;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
 
-        canvas.toBlob(async (blob) => {
-          if (!blob) return;
+      const formData = new FormData();
+      formData.append("image", blob, "frame.jpg");
 
-          const formData = new FormData();
-          formData.append("image", blob, "frame.jpg");
+      const res = await fetch(
+        "https://YOUR-NGROK-URL/analyze",
+        {
+          method: "POST",   // 🔴 هذا أهم سطر
+          body: formData,
+        }
+      );
 
-          // 🚀 إرسال للسيرفر
-          const res = await fetch(
-            "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze",
-            {
-              method: "POST",
-              body: formData,
-            }
-          );
+      const data = await res.json();
 
-          if (!res.ok) {
-            setAiError("Server error");
-            return;
-          }
+      setAiStatus(data.status);
+      setAiConfidence(data.confidence);
 
-          const data = await res.json();
+    }, "image/jpeg");
 
-          setAiStatus(data.status);
-          setAiConfidence(data.confidence);
-          setAiError(null);
-
-          if (data.status?.toLowerCase() === "danger") {
-            onDangerDetected?.(data.confidence);
-          }
-        }, "image/jpeg");
-
-      } catch (err) {
-        setAiError("AI feed offline");
-      }
-    }, 1500);
-
+  } catch (err) {
+    setAiError("AI feed offline");
+  }
+}, 1500);
     return () => clearInterval(interval);
   }, [onDangerDetected]);
 
