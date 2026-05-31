@@ -1,23 +1,29 @@
 const express = require("express");
 const cors = require("cors");
+const multer = require("multer");
 const tf = require("@tensorflow/tfjs-node");
 const tmImage = require("@teachablemachine/image");
-const ffmpeg = require("fluent-ffmpeg");
-const ffmpegPath = require("ffmpeg-static");
-const fs = require("fs");
+const path = require("path");
 
 const app = express();
 app.use(cors());
 
-ffmpeg.setFfmpegPath(ffmpegPath);
+// 📦 تخزين الصورة في الذاكرة
+const upload = multer({ storage: multer.memoryStorage() });
 
-// 🧠 موديل AI
-const MODEL_URL = "file://public/model/model.json";
-const METADATA_URL = "file://public/model/metadata.json";
+// 📁 مسار الموديل
+app.use("/model", express.static(path.join(__dirname, "public/model")));
 
-let model;
+const MODEL_URL =
+  "file://" + path.join(__dirname, "public/model/model.json");
 
-async function loadModel() {
+const METADATA_URL =
+  "file://" + path.join(__dirname, "public/model/metadata.json");
+
+let model = null;
+
+// 🧠 تحميل الموديل مرة واحدة فقط
+async function getModel() {
   if (!model) {
     console.log("⏳ Loading AI model...");
     model = await tmImage.load(MODEL_URL, METADATA_URL);
@@ -26,39 +32,33 @@ async function loadModel() {
   return model;
 }
 
-// 🎥 هنا رابط البث من VDO.Ninja
-const STREAM_URL =
-  "https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1";
-
-// 📸 نسحب صورة من الفيديو
-function captureFrame() {
-  return new Promise((resolve, reject) => {
-    const output = "./frame.jpg";
-
-    ffmpeg(STREAM_URL)
-      .frames(1)
-      .output(output)
-      .on("end", () => resolve(output))
-      .on("error", reject)
-      .run();
+// ❤️ اختبار السيرفر
+app.get("/", (req, res) => {
+  res.json({
+    status: "server running",
   });
-}
+});
 
-// 🧠 تحليل مباشر
-app.get("/analyze-stream", async (req, res) => {
+// 🧠 AI ANALYZE (هذا أهم جزء)
+app.post("/analyze", upload.single("image"), async (req, res) => {
   try {
-    const model = await loadModel();
+    const model = await getModel();
 
-    const imagePath = await captureFrame();
+    if (!req.file) {
+      return res.status(400).json({ error: "No image received" });
+    }
 
-    const imageBuffer = fs.readFileSync(imagePath);
-    const tensor = tf.node.decodeImage(imageBuffer);
+    // تحويل الصورة إلى Tensor
+    const imageTensor = tf.node.decodeImage(req.file.buffer, 3);
 
-    const prediction = await model.predict(tensor);
+    // prediction
+    const prediction = await model.predict(imageTensor);
 
-    tensor.dispose();
+    imageTensor.dispose();
 
+    // ترتيب النتائج
     prediction.sort((a, b) => b.probability - a.probability);
+
     const top = prediction[0];
 
     res.json({
@@ -67,15 +67,14 @@ app.get("/analyze-stream", async (req, res) => {
     });
   } catch (err) {
     console.error("❌ ERROR:", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      error: err.message,
+    });
   }
 });
 
-// 🔥 اختبار السيرفر
-app.get("/", (req, res) => {
-  res.json({ status: "server running" });
-});
-
-app.listen(3000, "0.0.0.0", () => {
-  console.log("🚀 Server running on http://localhost:3000");
+// 🚀 تشغيل السيرفر
+const PORT = 3000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
