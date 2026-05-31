@@ -33,14 +33,15 @@ async function getModel() {
 }
 
 // ❤️ اختبار السيرفر
-app.get("/", (req, res) => {
+app.get("/status", (req, res) => {
   res.json({
-    status: "server running",
+    status: "swimming",
+    confidence: 87,
   });
 });
 
 // 🧠 AI ANALYZE (هذا أهم جزء)
-app.get("/status", upload.single("image"), async (req, res) => {
+app.post("/analyze", upload.single("image"), async (req, res) => {
   try {
     const model = await getModel();
 
