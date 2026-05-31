@@ -968,6 +968,7 @@ function AiRow({ icon: Icon, label, value, tone }: { icon: any; label: string; v
 }
 
 /* ---------- Live ---------- */
+
 function LiveScreen({
   t,
   riskCritical,
@@ -981,86 +982,67 @@ function LiveScreen({
   const [aiConfidence, setAiConfidence] = useState<number>(0);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-
-  // 🎥 تشغيل بث VDO.Ninja داخل video
+  // 🧠 AI فقط من السيرفر (بدون capture نهائيًا)
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(
+          "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze"
+        );
 
-    video.src = "https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1";
-    video.play().catch(() => {});
-  }, []);
+        if (!res.ok) {
+          setAiError("Server error");
+          return;
+        }
 
-  // 🧠 AI Loop
-  useEffect(() => {
-  const interval = setInterval(async () => {
-    try {
-      const res = await fetch(
-        "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze-stream"
-      );
+        const data = await res.json();
 
-      const data = await res.json();
+        setAiStatus(data.status);
+        setAiConfidence(data.confidence);
 
-      setAiStatus(data.status);
-      setAiConfidence(data.confidence);
-
-      if (data.status?.toLowerCase() === "danger") {
-        onDangerDetected(data.confidence);
+        if (data.status?.toLowerCase() === "danger") {
+          onDangerDetected(data.confidence);
+        }
+      } catch (err) {
+        setAiError("AI feed offline");
       }
-    } catch (err) {
-      setAiError("AI feed offline");
-    }
-  }, 1500);
+    }, 1500);
 
-  return () => clearInterval(interval);
-}, [onDangerDetected]);
+    return () => clearInterval(interval);
+  }, [onDangerDetected]);
 
-  const statusKey = aiStatus.toLowerCase();
-  const isDanger = statusKey === "danger";
+  const isDanger = aiStatus.toLowerCase() === "danger";
 
-  const statusTone =
-    isDanger
-      ? "text-danger"
-      : statusKey === "swimming"
-      ? "text-aqua"
-      : "text-foreground";
+  const statusTone = isDanger
+    ? "text-danger"
+    : aiStatus.toLowerCase() === "swimming"
+    ? "text-aqua"
+    : "text-foreground";
 
   return (
     <div className="space-y-4 px-5">
+      
+      {/* 🎥 LIVE VIEW (بدون تغيير تصميمك) */}
       <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
         <div className="aspect-[3/4] w-full bg-black">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="h-full w-full object-cover"
+          <iframe
+            src="https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1"
+            title="live camera"
+            allow="autoplay; camera; microphone; fullscreen"
+            className="h-full w-full border-0"
           />
         </div>
 
-        <div className="pointer-events-none absolute end-3 top-3 rounded-full bg-red-600 px-2 py-1 text-[10px] text-white">
+        <div className="absolute top-3 right-3 bg-red-600 text-white text-[10px] px-2 py-1 rounded-full">
           LIVE
         </div>
 
-        <div className="pointer-events-none absolute start-3 top-3 rounded-full bg-black/50 px-2 py-1 text-[10px] text-white">
-          iPad Camera
-        </div>
-
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between rounded-xl bg-black/60 px-3 py-2 text-white">
-          <div>
-            <div className="text-xs font-bold">{t?.mainPool}</div>
-            <div className="text-xs">
-              {aiStatus} · {aiConfidence}%
-            </div>
-          </div>
-
-          <div className="text-xs">
-            {riskCritical || isDanger ? "CRITICAL" : "SAFE"}
-          </div>
+        <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white p-2 rounded-xl text-xs">
+          {t?.mainPool} · {aiStatus} · {aiConfidence}%
         </div>
       </div>
 
+      {/* 🧠 AI PANEL */}
       <div className="rounded-xl border p-3 text-sm">
         <div className="font-bold">AI Status</div>
 
@@ -1068,14 +1050,14 @@ function LiveScreen({
         <div>Confidence: {aiConfidence}%</div>
 
         {aiError && (
-          <div className="text-red-500 text-xs mt-2">{aiError}</div>
+          <div className="text-red-500 text-xs mt-2">
+            {aiError}
+          </div>
         )}
       </div>
     </div>
   );
 }
-
-
 /* ---------- Alerts (detailed incidents log) ---------- */
 
 function AlertsScreen({ t, incidents, lang }: { t: T; incidents: Incident[]; lang: Lang }) {
