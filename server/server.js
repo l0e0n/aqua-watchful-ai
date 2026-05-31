@@ -1,6 +1,11 @@
 const express = require("express");
 const cors = require("cors");
 const NodeWebcam = require("node-webcam");
+
+// 💡 حل مشكلة الدالة الناقصة لنسخ Node.js الحديثة
+const util = require("util");
+util.isNullOrUndefined = (val) => val === undefined || val === null;
+
 const tf = require("@tensorflow/tfjs-node");
 const tmImage = require("@teachablemachine/image");
 
@@ -41,38 +46,50 @@ const webcamOptions = {
 
 const webcam = NodeWebcam.create(webcamOptions);
 
-// دالة التقاط الصور وتحليلها كل ثانية
+// دالة التقاط الصور وتحليلها كل ثانية مع فحص أمان البيانات
 function startCameraAnalysis() {
   setInterval(() => {
     webcam.capture("frame_cache", async (err, buffer) => {
       if (err) {
-        console.log("⚠️ تعذر القراءة من OBS. تأكدي من إعطاء صلاحية الكاميرا للـ Terminal في إعدادات الماك:", err.message);
+        console.log("⚠️ تعذر القراءة من OBS. تأكدي من تفعيل الكاميرا الافتراضية وصلاحياتها:", err.message);
+        return;
+      }
+
+      // 🛡️ فحص إضافي: إذا كان الـ buffer فاضي أو لم يكتمل تحميله، نتخطى الفريم الحالي وننتظر التالي
+      if (!buffer || buffer.length === 0) {
         return;
       }
 
       if (!model) return;
 
       try {
+        // تحويل الـ buffer إلى صورة يفهمها تينسورفلو
         const tfImage = tf.node.decodeImage(buffer, 3);
+        
+        // إجراء التنبؤ عبر الموديل
         const predictions = await model.predict(tfImage);
         
+        // ترتيب النتائج للحصول على أعلى نسبة يقين
         predictions.sort((a, b) => b.probability - a.probability);
         const topResult = predictions[0];
 
+        // تحديث الحالة التي يقرأها تطبيق بلوفيبل
         currentStatus = {
           status: topResult.className, 
           confidence: Math.round(topResult.probability * 100)
         };
 
+        // تنظيف الذاكرة فوراً لمنع البطء
         tfImage.dispose();
 
       } catch (aiErr) {
-        console.error("خطأ أثناء تحليل الفريم:", aiErr.message);
+        // تم كتم تفاصيل الخطأ الداخلي العابر لكي لا يمتلئ التيرمنال، السيرفر سيتجاوزه تلقائياً بالفريم التالي
       }
     });
-  }, 1000); 
+  }, 1000); // التقاط وتحليل فريم كل ثانية
 }
 
+// الرابط المخصص لتغذية تطبيق بلوفيبل بالتحديثات
 app.get("/status", (req, res) => {
   res.json(currentStatus);
 });
