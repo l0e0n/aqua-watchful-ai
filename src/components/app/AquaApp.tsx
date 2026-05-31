@@ -969,95 +969,92 @@ function AiRow({ icon: Icon, label, value, tone }: { icon: any; label: string; v
 
 /* ---------- Live ---------- */
 
-useEffect(() => {
-  let model: any;
+import * as tmImage from "@teachablemachine/image";
 
-  const MODEL_URL =
-    "https://teachablemachine.withgoogle.com/models/AIeD8hzch/";
+function LiveScreen({ t, riskCritical, onDangerDetected }: any) {
+  const [aiStatus, setAiStatus] = useState("—");
+  const [aiConfidence, setAiConfidence] = useState(0);
+  const [aiError, setAiError] = useState<string | null>(null);
 
-  const video = document.createElement("video");
-  video.autoplay = true;
-  video.playsInline = true;
-  video.muted = true;
-  video.style.display = "none";
+  useEffect(() => {
+    let model: any;
 
-  video.src =
-    "https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1";
+    const MODEL_URL =
+      "https://teachablemachine.withgoogle.com/models/AIeD8hzch/";
 
-  document.body.appendChild(video);
+    const video = document.createElement("video");
+    video.autoplay = true;
+    video.playsInline = true;
+    video.muted = true;
 
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
+    video.src =
+      "https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1";
 
-  async function loadModel() {
-    try {
-      model = await tmImage.load(
-        MODEL_URL + "model.json",
-        MODEL_URL + "metadata.json"
-      );
+    document.body.appendChild(video);
 
-      console.log("✅ Model loaded");
-    } catch (err) {
-      console.error("❌ Model load failed", err);
-      setAiError("model failed");
-    }
-  }
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
 
-  loadModel();
-
-  const interval = setInterval(async () => {
-    try {
-      if (!model || !video || !ctx) return;
-
-      canvas.width = 224;
-      canvas.height = 224;
-
-      ctx.drawImage(video, 0, 0, 224, 224);
-
-      const prediction = await model.predict(canvas);
-
-      prediction.sort(
-        (a: any, b: any) => b.probability - a.probability
-      );
-
-      const top = prediction[0];
-
-      const status = top.className;
-      const confidence = Math.round(top.probability * 100);
-
-      setAiStatus(status);
-      setAiConfidence(confidence);
-
-      console.log("AI:", status, confidence);
-
-      // 👶 child near pool
-      if (status === "child near pool" && confidence > 60) {
-        onDangerDetected(confidence);
+    const loadModel = async () => {
+      try {
+        model = await tmImage.load(
+          MODEL_URL + "model.json",
+          MODEL_URL + "metadata.json"
+        );
+        console.log("Model loaded");
+      } catch (err) {
+        console.error(err);
+        setAiError("model failed");
       }
+    };
 
-      // 🚨 drowning
-      if (status === "drowning" && confidence > 50) {
-        new Audio(
-          "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"
-        ).play();
+    loadModel();
 
-        onDangerDetected(confidence);
+    const interval = setInterval(async () => {
+      try {
+        if (!model || !ctx) return;
+
+        canvas.width = 224;
+        canvas.height = 224;
+
+        ctx.drawImage(video, 0, 0, 224, 224);
+
+        const prediction = await model.predict(canvas);
+
+        prediction.sort((a: any, b: any) => b.probability - a.probability);
+
+        const top = prediction[0];
+
+        const status = top.className;
+        const confidence = Math.round(top.probability * 100);
+
+        setAiStatus(status);
+        setAiConfidence(confidence);
+
+        if (status === "child near pool" && confidence > 60) {
+          onDangerDetected(confidence);
+        }
+
+        if (status === "drowning" && confidence > 50) {
+          new Audio(
+            "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"
+          ).play();
+
+          onDangerDetected(confidence);
+        }
+      } catch (err) {
+        setAiError("AI error");
       }
-    } catch (err) {
-      console.error("AI loop error", err);
-      setAiError("AI error");
-    }
-  }, 1000);
+    }, 1000);
 
-  return () => {
-    clearInterval(interval);
-    video.remove();
-  };
-}, 
+    return () => {
+      clearInterval(interval);
+      video.remove();
+    };
+  }, [onDangerDetected]);
 
-[onDangerDetected];
   const statusKey = aiStatus.toLowerCase();
-  const isDanger = statusKey === "danger";
+  const isDanger = statusKey === "drowning";
 
   const statusTone =
     isDanger
@@ -1068,96 +1065,30 @@ useEffect(() => {
 
   return (
     <div className="space-y-4 px-5">
-      <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
-        <div className="aspect-[3/4] w-full bg-deep">
-          <iframe
-            src="https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1"
-            title="iPad live camera"
-            allow="autoplay; camera; microphone; fullscreen"
-            allowFullScreen
-            className="h-full w-full border-0"
-          />
+      <div className="relative rounded-3xl overflow-hidden border">
+
+        <iframe
+          src="https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1"
+          className="h-[400px] w-full"
+        />
+
+        <div className="absolute bottom-3 left-3 text-white">
+          {aiStatus} · {aiConfidence}%
         </div>
 
-        <div className="pointer-events-none absolute end-3 top-3 flex items-center gap-1.5 rounded-full bg-danger/90 px-2.5 py-1 text-[10px] font-bold text-destructive-foreground">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />{" "}
-          LIVE
-        </div>
-
-        <div className="pointer-events-none absolute start-3 top-3 rounded-full bg-background/60 px-2.5 py-1 text-[10px] backdrop-blur">
-          iPad · HD
-        </div>
-
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between rounded-2xl bg-background/70 px-3 py-2.5 backdrop-blur">
-          <div className="text-[11px]">
-            <div className="font-semibold">{t.mainPool}</div>
-            <div className={`font-bold ${statusTone}`}>
-              {aiStatus} · {aiConfidence}%
-            </div>
-          </div>
-
-          <div
-            className={`grid h-9 w-9 place-items-center rounded-full ${
-              isDanger ? "bg-danger/80" : "bg-aqua-gradient"
-            }`}
-          >
-            {isDanger ? (
-              <Zap className="h-4 w-4 text-destructive-foreground" />
-            ) : (
-              <Activity className="h-4 w-4 text-primary-foreground" />
-            )}
-          </div>
-        </div>
       </div>
 
-      <div className="rounded-2xl border border-border/60 bg-card-gradient p-4">
-        <div className="text-xs font-bold">{t.instantAnalysis}</div>
-
-        <div className="mt-3 space-y-2.5">
-          <div className="flex items-center justify-between rounded-xl bg-background/40 px-3 py-2">
-            <span className="text-xs text-muted-foreground">Status</span>
-            <span className={`text-xs font-semibold ${statusTone}`}>
-              {aiStatus}
-            </span>
-          </div>
-
-          <div className="rounded-xl bg-background/40 px-3 py-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                Confidence
-              </span>
-              <span className="text-xs font-semibold">
-                {aiConfidence}%
-              </span>
-            </div>
-
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border/60">
-              <div
-                className={`h-full ${
-                  isDanger ? "bg-danger" : "bg-aqua-gradient"
-                }`}
-                style={{ width: `${aiConfidence}%` }}
-              />
-            </div>
-          </div>
-
-          <AiRow
-            icon={Activity}
-            label={t.riskLevel}
-            value={riskCritical || isDanger ? t.critical : t.low}
-            tone={riskCritical || isDanger ? "danger" : "default"}
-          />
-
-          {aiError && (
-            <div className="rounded-xl bg-danger/10 px-3 py-2 text-[10px] text-danger">
-              AI feed offline ({aiError})
-            </div>
-          )}
+      {aiError && (
+        <div className="text-red-500 text-xs">
+          AI feed offline ({aiError})
         </div>
-      </div>
+      )}
     </div>
   );
 }
+
+export default LiveScreen;
+
 
 
 /* ---------- Alerts (detailed incidents log) ---------- */
