@@ -977,48 +977,82 @@ function LiveScreen({ t, onDangerDetected }: any) {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(
-          "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze",
-          {
-            method: "POST",
+        // 🎥 نجيب الفيديو من iframe
+        const iframe = document.querySelector("iframe") as HTMLIFrameElement;
+        if (!iframe) return;
+
+        const video =
+          iframe.contentWindow?.document?.querySelector("video") as HTMLVideoElement;
+
+        if (!video) return;
+
+        // 🧠 نحول الفيديو لصورة
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) return;
+
+        canvas.width = 640;
+        canvas.height = 480;
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob(async (blob) => {
+          if (!blob) return;
+
+          const formData = new FormData();
+          formData.append("image", blob, "frame.jpg");
+
+          // 🚀 إرسال للسيرفر
+          const res = await fetch(
+            "https://sneezing-folk-cosponsor.ngrok-free.dev/analyze",
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+
+          if (!res.ok) {
+            setAiError("Server error");
+            return;
           }
-        );
 
-        if (!res.ok) return;
+          const data = await res.json();
 
-        const data = await res.json();
+          setAiStatus(data.status);
+          setAiConfidence(data.confidence);
+          setAiError(null);
 
-        setAiStatus(data.status);
-        setAiConfidence(data.confidence);
-        setAiError(null);
-
-        if (data.status?.toLowerCase() === "danger") {
-          onDangerDetected?.(data.confidence);
-        }
+          if (data.status?.toLowerCase() === "danger") {
+            onDangerDetected?.(data.confidence);
+          }
+        }, "image/jpeg");
 
       } catch (err) {
         setAiError("AI feed offline");
       }
-    }, 2000);
+    }, 1500);
 
     return () => clearInterval(interval);
   }, [onDangerDetected]);
 
   return (
-    <div>
-      {/* 🎥 فقط عرض */}
+    <div className="space-y-4 px-5">
+
+      {/* 🎥 LIVE STREAM */}
       <iframe
         src="https://vdo.ninja/?view=FAiZgaS&cleanoutput=1&autostart=1"
-        className="w-full h-[400px]"
+        className="w-full h-[400px] rounded-xl"
+        allow="autoplay; camera; microphone"
       />
 
-      {/* 🧠 AI result */}
-      <div>
-        <h3>AI Status: {aiStatus}</h3>
-        <p>Confidence: {aiConfidence}%</p>
+      {/* 🧠 AI RESULT */}
+      <div className="rounded-xl border p-3">
+        <div>AI Status: {aiStatus}</div>
+        <div>Confidence: {aiConfidence}%</div>
 
         {aiError && (
-          <p style={{ color: "red" }}>{aiError}</p>
+          <div style={{ color: "red" }}>{aiError}</div>
         )}
       </div>
     </div>
@@ -1026,6 +1060,7 @@ function LiveScreen({ t, onDangerDetected }: any) {
 }
 
 export default LiveScreen;
+
 /* ---------- Alerts (detailed incidents log) ---------- */
 
 function AlertsScreen({ t, incidents, lang }: { t: T; incidents: Incident[]; lang: Lang }) {
