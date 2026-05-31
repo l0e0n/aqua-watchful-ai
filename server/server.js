@@ -8,10 +8,10 @@ const tmImage = require("@teachablemachine/image");
 const app = express();
 app.use(cors());
 
+// استقبال الصور
 const upload = multer({ storage: multer.memoryStorage() });
 
-app.use("/model", express.static(path.join(__dirname, "public/model")));
-
+// موديل Teachable Machine المحلي
 const MODEL_URL =
   "file://" + path.join(__dirname, "public/model/model.json");
 
@@ -20,54 +20,56 @@ const METADATA_URL =
 
 let model = null;
 
-// 🟢 تحميل المودل أول مرة عند الحاجة فقط (LAZY LOAD FIX)
-async function getModel() {
+// تحميل الموديل مرة واحدة
+async function loadModel() {
   if (!model) {
     console.log("⏳ Loading AI model...");
-
     model = await tmImage.load(MODEL_URL, METADATA_URL);
-
-    console.log("✅ AI Model loaded");
+    console.log("✅ Model loaded");
   }
   return model;
 }
 
-// 🟢 status
-app.get("/status", (req, res) => {
-  res.json({
-    status: model ? "ready" : "not_loaded",
-    confidence: 0,
-  });
+// اختبار السيرفر
+app.get("/", (req, res) => {
+  res.json({ status: "server running" });
 });
 
-// 🧠 analyze
+// 🔥 أهم endpoint: تحليل صورة من البث
 app.post("/analyze", upload.single("image"), async (req, res) => {
   try {
-    const model = await getModel();
+    const model = await loadModel();
 
     if (!req.file) {
-      return res.status(400).json({ error: "No image" });
+      return res.status(400).json({ error: "No image received" });
     }
 
-    const imageTensor = tf.node.decodeImage(req.file.buffer);
+    // تحويل الصورة إلى Tensor
+    const imageTensor = tf.node.decodeImage(req.file.buffer, 3);
 
+    // تشغيل AI
     const prediction = await model.predict(imageTensor);
 
-    prediction.sort((a, b) => b.probability - a.probability);
+    // تنظيف الذاكرة
+    imageTensor.dispose();
 
+    // ترتيب النتائج
+    prediction.sort((a, b) => b.probability - a.probability);
     const top = prediction[0];
 
+    // رجوع النتيجة للواجهة
     res.json({
       status: top.className,
       confidence: Math.round(top.probability * 100),
     });
+
   } catch (err) {
-    console.error(err);
+    console.error("❌ AI Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// 🚀 start
+// تشغيل السيرفر
 app.listen(3000, "0.0.0.0", () => {
   console.log("🚀 Server running on http://localhost:3000");
 });

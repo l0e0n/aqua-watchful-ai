@@ -1012,7 +1012,7 @@ function LiveScreen({
         const formData = new FormData();
         formData.append("image", blob, "frame.jpg");
 
-        const res = await fetch("https://sneezing-folk-cosponsor.ngrok-free.dev/status", {
+        const res = await fetch("https://sneezing-folk-cosponsor.ngrok-free.dev/analyze", {
           method: "POST",
           body: formData,
         });
