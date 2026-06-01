@@ -2,9 +2,21 @@ const express = require("express");
 const cors = require("cors");
 const NodeWebcam = require("node-webcam");
 
-// 💡 حل مشكلة الدالة الناقصة لنسخ Node.js الحديثة
+// 💡 حل مشكلة الدوال الناقصة لنسخ Node.js والبيئة المزيفة
 const util = require("util");
 util.isNullOrUndefined = (val) => val === undefined || val === null;
+
+global.document = {
+  createElement: () => ({
+    getContext: () => ({
+      drawImage: () => {},
+      getImageData: () => ({ data: new Uint8ClampedArray() })
+    })
+  })
+};
+global.HTMLVideoElement = class {};
+global.HTMLImageElement = class {};
+global.HTMLCanvasElement = class {};
 
 const tf = require("@tensorflow/tfjs-node");
 const tmImage = require("@teachablemachine/image");
@@ -17,23 +29,30 @@ app.use(express.json());
 const MODEL_URL = "https://teachablemachine.withgoogle.com/models/AIeD8hzch/"; 
 
 let model;
-let currentStatus = { status: "Initializing AI...", confidence: 0 };
+let labels = []; // لتخزين أسماء التصنيفات (مثل Safe و Drowning)
+let currentStatus = { status: "Model Loading...", confidence: 0 };
 
-// دالة تحميل الموديل عند بدء تشغيل السيرفر
+// استبدلي دالة loadModel القديمة بهذه الدالة بالكامل:
 async function loadModel() {
   try {
-    const modelURL = MODEL_URL + "model.json";
-    const metadataURL = MODEL_URL + "metadata.json";
-    model = await tmImage.load(modelURL, metadataURL);
-    currentStatus = { status: "Safe", confidence: 100 };
-    console.log("✅ تم تحميل موديل الذكاء الاصطناعي بنجاح!");
+    // 💡 تعديل المسار ليقرأ من مجلد public/model الذي يحتوي على ملفاتك
+    const modelURL = tf.io.fileSystem("./public/model/model.json");
+    
+    // تحميل الموديل باستخدام تينسورفلو المحلي
+    model = await tf.loadLayersModel(modelURL);
+    
+    // قراءة التصنيفات من ملف metadata المحلي في نفس المجلد الصحيح
+    const metadata = require("./public/model/metadata.json");
+    labels = metadata.labels; 
+
+    currentStatus = { status: "Waiting for First Frame...", confidence: 0 };
+    console.log("✅ تم تحميل موديل الذكاء الاصطناعي محلياً من المجلد الصحيح وتجهيز التصنيفات!");
     startCameraAnalysis(); 
   } catch (err) {
-    console.error("❌ فشل تحميل الموديل، تأكدي من الرابط:", err.message);
+    console.error("❌ فشل تحميل الموديل محلياً، تأكدي من مسار الملفات:", err.message);
   }
 }
 
-// إعدادات التقاط الصور من OBS Virtual Camera
 const webcamOptions = {
   width: 640,
   height: 480,
@@ -46,50 +65,60 @@ const webcamOptions = {
 
 const webcam = NodeWebcam.create(webcamOptions);
 
-// دالة التقاط الصور وتحليلها كل ثانية مع فحص أمان البيانات
 function startCameraAnalysis() {
   setInterval(() => {
     webcam.capture("frame_cache", async (err, buffer) => {
       if (err) {
-        console.log("⚠️ تعذر القراءة من OBS. تأكدي من تفعيل الكاميرا الافتراضية وصلاحياتها:", err.message);
+        console.log("⚠️ خطأ في التقاط الكاميرا:", err.message);
         return;
       }
 
-      // 🛡️ فحص إضافي: إذا كان الـ buffer فاضي أو لم يكتمل تحميله، نتخطى الفريم الحالي وننتظر التالي
-      if (!buffer || buffer.length === 0) {
-        return;
-      }
-
+      if (!buffer || buffer.length === 0) return;
       if (!model) return;
 
       try {
-        // تحويل الـ buffer إلى صورة يفهمها تينسورفلو
-        const tfImage = tf.node.decodeImage(buffer, 3);
-        
-        // إجراء التنبؤ عبر الموديل
-        const predictions = await model.predict(tfImage);
-        
-        // ترتيب النتائج للحصول على أعلى نسبة يقين
+        // 1. تحويل الـ buffer إلى تينسور بالمعايير المطلوبة للموديل (تغيير الحجم لـ 224x224 وتطبيع الألوان)
+        const tfImage = tf.node.decodeImage(buffer, 3)
+          .resizeBilinear([224, 224])
+          .expandDims(0)
+          .toFloat()
+          .div(127.5)
+          .sub(1);
+
+        // 2. التنبؤ عبر المحرك الأساسي مباشرة لتجنب أخطاء المتصفح
+        // ✅ السطر الجديد الصحيح
+        const logits = model.predict(tfImage);
+        const probabilities = await logits.data();
+
+        // 3. دمج التصنيفات مع النسب المستخرجة وترتيبها
+        const predictions = labels.map((label, index) => ({
+          className: label,
+          probability: probabilities[index]
+        }));
+
         predictions.sort((a, b) => b.probability - a.probability);
         const topResult = predictions[0];
 
-        // تحديث الحالة التي يقرأها تطبيق بلوفيبل
+        // طباعة النتيجة الحقيقية فوراً في التيرمنال
+        console.log(`🤖 نتيجة التحليل الحالية: ${topResult.className} (${Math.round(topResult.probability * 100)}%)`);
+
+        // 4. تحديث الحالة للتطبيق
         currentStatus = {
           status: topResult.className, 
           confidence: Math.round(topResult.probability * 100)
         };
 
-        // تنظيف الذاكرة فوراً لمنع البطء
+        // تنظيف الذاكرة بالكامل لمنع أي تعليق في الجهاز
         tfImage.dispose();
+        logits.dispose();
 
       } catch (aiErr) {
-        // تم كتم تفاصيل الخطأ الداخلي العابر لكي لا يمتلئ التيرمنال، السيرفر سيتجاوزه تلقائياً بالفريم التالي
+        console.error("❌ خطأ داخلي أثناء معالجة التنبؤ المباشر:", aiErr.message);
       }
     });
-  }, 1000); // التقاط وتحليل فريم كل ثانية
+  }, 1000); 
 }
 
-// الرابط المخصص لتغذية تطبيق بلوفيبل بالتحديثات
 app.get("/status", (req, res) => {
   res.json(currentStatus);
 });

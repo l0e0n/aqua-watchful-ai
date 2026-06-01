@@ -979,21 +979,55 @@ interface LiveScreenProps {
 }
 
 function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
-  // حالات التصميم الأصلية
+  // حالات التصميم الأصلية حقتك تماماً
   const [aiStatus, setAiStatus] = useState("Connecting to AI Server...");
   const [aiConfidence, setAiConfidence] = useState(0);
   const [aiError, setAiError] = useState<string | null>(null);
   
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const alarmIntervalRef = useRef<number | null>(null); // مرجع لحفظ وتتبع الإنذار الصوتي
 
   // رابط البث الحي الخاص بالايباد المعروض داخل التطبيق
   const streamURL = "https://vdo.ninja/player.html?view=FAiZgaS&autoplay=1&mute=1&cleanoutput=1";
+
+  // 🔊 دالة توليد صوت إنذار (Beep متكرر حاد) بدون ملفات خارجية
+  const startAlarm = () => {
+    if (alarmIntervalRef.current) return; // إذا الإنذار شغال أصلاً ما نكرره
+    
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const audioCtx = new AudioContextClass();
+    
+    alarmIntervalRef.current = window.setInterval(() => {
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      oscillator.type = "sawtooth"; // صوت تنبيه حاد وقوي
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // تردد الصوت
+      gainNode.gain.setValueAtTime(0.4, audioCtx.currentTime); // مستوى الصوت
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.3); // مدة الرنة ثلث ثانية
+    }, 500); // يتكرر كل نصف ثانية
+  };
+
+  // 🔇 دالة إيقاف صوت الإنذار فوراً
+  const stopAlarm = () => {
+    if (alarmIntervalRef.current) {
+      clearInterval(alarmIntervalRef.current);
+      alarmIntervalRef.current = null;
+    }
+  };
 
   useEffect(() => {
     // دالة لجلب التحديثات الحية من السيرفر المحلي كل ثانية
     const interval = setInterval(async () => {
       try {
-        const res = await fetch("http://192.168.8.101:3000/status");
+        // قراءة السيرفر المحلي الخاص بكِ (تم تحديث الرابط لـ localhost ليعمل على جهازك مباشرة)
+        const res = await fetch("http://localhost:3000/status");
         if (!res.ok) throw new Error();
         const data = await res.json();
         
@@ -1001,28 +1035,35 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
         setAiConfidence(data.confidence);
         setAiError(null);
 
-        // إذا كانت الكلمة تحتوي على خطر أو غرق ونسبة اليقين أعلى من 80% يتم إطلاق الإنذار ورفع الأرضية
+        // إذا كانت الكلمة تحتوي على خطر أو غرق ونسبة اليقين أعلى من 80% يتم إطلاق الإنذار ورفع الأرضية وصوت التنبيه
         const statusLower = data.status.toLowerCase();
         if ((statusLower.includes("danger") || statusLower.includes("drowning") || statusLower.includes("غرق")) && data.confidence > 80) {
           onDangerDetected?.(data.confidence);
+          startAlarm(); // 🚨 تشغيل الصوت فوراً عند الخطر
+        } else {
+          stopAlarm(); // 🟢 إيقاف الصوت تلقائياً إذا زال الخطر
         }
       } catch (err) {
         setAiError("Waiting for local AI server...");
         setAiStatus("Connecting...");
+        stopAlarm(); // إيقاف الصوت في حال انقطع اتصال السيرفر منعاً للتعليق
       }
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current);
+    };
   }, [onDangerDetected]);
 
-  // منطق الألوان الأصلي الخاص بتصميمك
+  // منطق الألوان الأصلي الخاص بتصميمك كاملاً
   const statusKey = aiStatus.toLowerCase();
   const isDanger = riskCritical || statusKey.includes("danger") || statusKey.includes("drowning") || statusKey.includes("غرق");
   const statusTone = isDanger ? "text-danger" : statusKey.includes("swimming") || statusKey.includes("safe") ? "text-aqua" : "text-foreground";
 
   return (
     <div className="space-y-4 px-5">
-      {/* كرت البث الحي - الديزاين الأصلي حقك كاملاً */}
+      {/* كرت البث الحي - الديزاين الأصلي حقك كاملاً بدون أي تعديل */}
       <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
         <div className="aspect-[3/4] w-full bg-deep">
           <iframe
@@ -1049,7 +1090,7 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
         </div>
       </div>
 
-      {/* لوحة التحليل الفوري السفلي - الديزاين الأصلي حقك كاملاً */}
+      {/* لوحة التحليل الفوري السفلي - الديزاين الأصلي حقك كاملاً بدون أي تعديل */}
       <div className="rounded-2xl border border-border/60 bg-card-gradient p-4">
         <div className="text-xs font-bold">{t.instantAnalysis}</div>
         <div className="mt-3 space-y-2.5">
