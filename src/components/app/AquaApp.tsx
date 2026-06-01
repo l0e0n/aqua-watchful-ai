@@ -969,7 +969,6 @@ function AiRow({ icon: Icon, label, value, tone }: { icon: any; label: string; v
 
 /* ---------- Live ---------- */
 
-
 interface LiveScreenProps {
   t: {
     mainPool: string;
