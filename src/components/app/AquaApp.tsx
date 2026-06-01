@@ -969,6 +969,7 @@ function AiRow({ icon: Icon, label, value, tone }: { icon: any; label: string; v
 
 /* ---------- Live ---------- */
 
+
 interface LiveScreenProps {
   t: {
     mainPool: string;
@@ -979,39 +980,64 @@ interface LiveScreenProps {
 }
 
 function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
-  // حالات التصميم الأصلية حقتك تماماً
+  // حالات التصميم الأصلية
   const [aiStatus, setAiStatus] = useState("Connecting to AI Server...");
   const [aiConfidence, setAiConfidence] = useState(0);
   const [aiError, setAiError] = useState<string | null>(null);
   
+  // حالة لمعرفة ما إذا كان المستخدم قد أعطى صلاحية الصوت للمتصفح
+  const [audioActivated, setAudioActivated] = useState(false);
+
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const alarmIntervalRef = useRef<number | null>(null); // مرجع لحفظ وتتبع الإنذار الصوتي
+  const alarmIntervalRef = useRef<number | null>(null); 
+  const audioCtxRef = useRef<AudioContext | null>(null); // حفظ محرك الصوت لمنع تكراره
 
   // رابط البث الحي الخاص بالايباد المعروض داخل التطبيق
   const streamURL = "https://vdo.ninja/player.html?view=FAiZgaS&autoplay=1&mute=1&cleanoutput=1";
 
-  // 🔊 دالة توليد صوت إنذار (Beep متكرر حاد) بدون ملفات خارجية
+  // دالة تفعيل محرك الصوت عند ضغط المستخدم
+  const activateAudio = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        audioCtxRef.current = new AudioContextClass();
+        setAudioActivated(true);
+        console.log("🔊 تم تفعيل نظام الصوت بنجاح ومستعد للإنذار!");
+      }
+    } catch (e) {
+      console.error("فشل تفعيل الصوت:", e);
+    }
+  };
+
+  // 🔊 دالة توليد صوت إنذار (Beep متكرر حاد)
   const startAlarm = () => {
-    if (alarmIntervalRef.current) return; // إذا الإنذار شغال أصلاً ما نكرره
+    if (alarmIntervalRef.current || !audioCtxRef.current) return;
     
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const audioCtx = new AudioContextClass();
+    const audioCtx = audioCtxRef.current;
     
+    // إذا كان المتصفح قد وضع الصوت في حالة نوم، نعمل له استئناف
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+
     alarmIntervalRef.current = window.setInterval(() => {
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-      
-      oscillator.type = "sawtooth"; // صوت تنبيه حاد وقوي
-      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // تردد الصوت
-      gainNode.gain.setValueAtTime(0.4, audioCtx.currentTime); // مستوى الصوت
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-      
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.3); // مدة الرنة ثلث ثانية
-    }, 500); // يتكرر كل نصف ثانية
+      try {
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        oscillator.type = "sawtooth"; // صوت تنبيه حاد وقوي جداً
+        oscillator.frequency.setValueAtTime(950, audioCtx.currentTime); // تردد الصوت ليكون كالإنذار الأصلي
+        gainNode.gain.setValueAtTime(0.6, audioCtx.currentTime); // مستوى الصوت
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.35); // مدة الرنة
+      } catch (err) {
+        console.error("خطأ في توليد نغمة الإنذار:", err);
+      }
+    }, 550); // يتكرر الصوت كل نصف ثانية تقريباً
   };
 
   // 🔇 دالة إيقاف صوت الإنذار فوراً
@@ -1026,7 +1052,6 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
     // دالة لجلب التحديثات الحية من السيرفر المحلي كل ثانية
     const interval = setInterval(async () => {
       try {
-        // قراءة السيرفر المحلي الخاص بكِ (تم تحديث الرابط لـ localhost ليعمل على جهازك مباشرة)
         const res = await fetch("http://localhost:3000/status");
         if (!res.ok) throw new Error();
         const data = await res.json();
@@ -1035,7 +1060,7 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
         setAiConfidence(data.confidence);
         setAiError(null);
 
-        // إذا كانت الكلمة تحتوي على خطر أو غرق ونسبة اليقين أعلى من 80% يتم إطلاق الإنذار ورفع الأرضية وصوت التنبيه
+        // إذا كانت الكلمة تحتوي على خطر أو غرق ونسبة اليقين أعلى من 80%
         const statusLower = data.status.toLowerCase();
         if ((statusLower.includes("danger") || statusLower.includes("drowning") || statusLower.includes("غرق")) && data.confidence > 80) {
           onDangerDetected?.(data.confidence);
@@ -1046,7 +1071,7 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
       } catch (err) {
         setAiError("Waiting for local AI server...");
         setAiStatus("Connecting...");
-        stopAlarm(); // إيقاف الصوت في حال انقطع اتصال السيرفر منعاً للتعليق
+        stopAlarm();
       }
     }, 1000);
 
@@ -1054,7 +1079,7 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
       clearInterval(interval);
       if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current);
     };
-  }, [onDangerDetected]);
+  }, [onDangerDetected, audioActivated]);
 
   // منطق الألوان الأصلي الخاص بتصميمك كاملاً
   const statusKey = aiStatus.toLowerCase();
@@ -1063,6 +1088,17 @@ function LiveScreen({ t, riskCritical, onDangerDetected }: LiveScreenProps) {
 
   return (
     <div className="space-y-4 px-5">
+      
+      {/* 🔔 شريط ذكي يظهر فقط إذا كان الصوت لم يُفعل بعد لتنبيهك أثناء العرض وضغطه */}
+      {!audioActivated && (
+        <button 
+          onClick={activateAudio}
+          className="w-full rounded-2xl bg-aqua-gradient p-3 text-center text-xs font-bold text-primary-foreground shadow-glow animate-pulse"
+        >
+          ⚠️ اضغطي هنا لتفعيل نظام أصوات الإنذار الحي للمتصفح
+        </button>
+      )}
+
       {/* كرت البث الحي - الديزاين الأصلي حقك كاملاً بدون أي تعديل */}
       <div className="relative overflow-hidden rounded-3xl border border-border/60 shadow-card-soft">
         <div className="aspect-[3/4] w-full bg-deep">
